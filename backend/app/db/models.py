@@ -59,6 +59,11 @@ class Document(Base):
     extractions: Mapped[list["Extraction"]] = relationship(
         back_populates="document", cascade="all, delete-orphan"
     )
+    findings: Mapped[list["AuditFinding"]] = relationship(
+        back_populates="document",
+        foreign_keys="AuditFinding.document_id",
+        cascade="all, delete-orphan",
+    )
 
 
 class OcrCache(Base):
@@ -243,6 +248,29 @@ class ExtractedField(Base):
     edited_value: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     extraction: Mapped[Extraction] = relationship(back_populates="fields")
+
+
+class AuditFinding(Base):
+    __tablename__ = "audit_findings"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    check_type: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    severity: Mapped[str] = mapped_column(String(16), nullable=False)
+    explanation: Mapped[str] = mapped_column(Text, nullable=False)
+    document_id: Mapped[int] = mapped_column(
+        ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    related_document_id: Mapped[int | None] = mapped_column(
+        ForeignKey("documents.id", ondelete="SET NULL"), nullable=True
+    )
+    field_citations: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow
+    )
+
+    document: Mapped[Document] = relationship(
+        back_populates="findings", foreign_keys=[document_id]
+    )
 
 
 settings = get_settings()

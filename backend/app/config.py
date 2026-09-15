@@ -22,6 +22,8 @@ class Settings:
     max_pdf_pages: int
     citation_match_threshold: int
     amount_tolerance: float
+    vendor_match_threshold: int
+    line_item_match_threshold: int
     database_url: str
 
     @property
@@ -40,6 +42,8 @@ def get_settings() -> Settings:
         max_pdf_pages=int(os.getenv("MAX_PDF_PAGES", "30")),
         citation_match_threshold=int(os.getenv("CITATION_MATCH_THRESHOLD", "85")),
         amount_tolerance=float(os.getenv("AMOUNT_TOLERANCE", "0.01")),
+        vendor_match_threshold=int(os.getenv("VENDOR_MATCH_THRESHOLD", "85")),
+        line_item_match_threshold=int(os.getenv("LINE_ITEM_MATCH_THRESHOLD", "80")),
         database_url=os.getenv("DATABASE_URL", f"sqlite:///{db_path.as_posix()}"),
     )
 
