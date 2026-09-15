@@ -59,6 +59,28 @@ curl "http://localhost:8000/api/documents/1/extraction"
 
 New uploads run OCR then extraction automatically. Existing OCR-complete documents need the extract POST above.
 
+## Phase 3: Audit checks
+
+After extraction, invoices are linked to purchase orders by PO number. The auditor runs vendor, total, date, line-item, and duplicate invoice-number checks. Each finding includes severity, a plain-English explanation, and citations to the extracted fields on both documents.
+
+Re-run checks across all extracted documents:
+
+```bash
+curl -X POST "http://localhost:8000/api/audit/run"
+```
+
+List all findings:
+
+```bash
+curl "http://localhost:8000/api/findings"
+```
+
+List findings for one document:
+
+```bash
+curl "http://localhost:8000/api/documents/1/findings"
+```
+
 ### Tests
 
 From `backend/`:
