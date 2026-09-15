@@ -8,6 +8,7 @@ from pydantic import BaseModel, ValidationError
 
 from app.config import get_settings
 from app.llm.base import (
+    LLMBillingError,
     LLMError,
     LLMInvalidOutputError,
     LLMRateLimitError,
@@ -20,13 +21,47 @@ logger = logging.getLogger(__name__)
 
 T = TypeVar("T", bound=BaseModel)
 
+BILLING_MARKERS = (
+    "prepayment credits",
+    "credits are depleted",
+    "credits depleted",
+    "enable billing",
+    "billing has not been enabled",
+    "insufficient credits",
+    "purchase additional credits",
+)
 
-def _is_rate_limit(exc: Exception) -> bool:
+
+def is_billing_error(exc: Exception) -> bool:
+    text = str(exc).lower()
+    return any(marker in text for marker in BILLING_MARKERS)
+
+
+def is_rate_limit_error(exc: Exception) -> bool:
+    """Retry only transient rate limits, never billing or credit failures."""
+    if is_billing_error(exc):
+        return False
+    text = str(exc).lower()
+    if "please retry" in text or "retry in" in text or "rate limit" in text:
+        return True
     code = getattr(exc, "code", None)
     if code == 429:
-        return True
-    text = str(exc).lower()
-    return "429" in text or "resource_exhausted" in text or "rate limit" in text
+        return "resource_exhausted" in text or "too many requests" in text
+    return False
+
+
+def billing_error_message(exc: Exception) -> str:
+    text = str(exc)
+    lower = text.lower()
+    if "prepayment credits" in lower or ("credits" in lower and "depleted" in lower):
+        return (
+            "Gemini billing error: prepayment credits are depleted. "
+            "Add credits or switch API keys. This request will not be retried."
+        )
+    summary = " ".join(text.split())
+    if len(summary) > 280:
+        summary = summary[:277] + "..."
+    return f"Gemini billing error: {summary}. This request will not be retried."
 
 
 class GeminiProvider:
@@ -57,7 +92,9 @@ class GeminiProvider:
                     ),
                 )
             except Exception as exc:
-                if _is_rate_limit(exc):
+                if is_billing_error(exc):
+                    raise LLMBillingError(billing_error_message(exc)) from exc
+                if is_rate_limit_error(exc):
                     raise LLMRateLimitError(str(exc)) from exc
                 if isinstance(exc, genai_errors.ClientError):
                     raise LLMError(f"Gemini request failed: {exc}") from exc

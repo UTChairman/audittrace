@@ -25,7 +25,11 @@ class LLMError(Exception):
 
 
 class LLMRateLimitError(LLMError):
-    """Raised when the provider returns a rate limit / quota error."""
+    """Raised when the provider returns a transient rate limit."""
+
+
+class LLMBillingError(LLMError):
+    """Raised when the provider rejects the request for billing or credit reasons."""
 
 
 class LLMInvalidOutputError(LLMError):
