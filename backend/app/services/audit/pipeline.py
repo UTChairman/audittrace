@@ -18,6 +18,7 @@ from app.services.audit.checks import (
     ExtractedDocument,
     FieldSnapshot,
     FindingDraft,
+    AuditCheckSettings,
     run_audit_checks,
 )
 
@@ -101,9 +102,13 @@ def run_audit(db: Session) -> int:
     documents = load_extracted_documents(db)
     drafts = run_audit_checks(
         documents,
-        amount_tolerance=settings.amount_tolerance,
-        vendor_match_threshold=settings.vendor_match_threshold,
-        line_item_match_threshold=settings.line_item_match_threshold,
+        settings=AuditCheckSettings(
+            amount_tolerance=settings.amount_tolerance,
+            vendor_match_threshold=settings.vendor_match_threshold,
+            line_item_match_threshold=settings.line_item_match_threshold,
+            total_mismatch_high_percent=settings.total_mismatch_high_percent,
+            invoice_before_po_low_days=settings.invoice_before_po_low_days,
+        ),
     )
     count = persist_findings(db, drafts)
     logger.info("Audit complete: %s finding(s) across %s document(s)", count, len(documents))

@@ -1,10 +1,15 @@
 from app.services.audit.checks import (
+    AuditCheckSettings,
     ExtractedDocument,
     FieldSnapshot,
     check_duplicate_invoice_numbers,
     check_invoice_against_po,
+    invoice_before_po_severity,
     run_audit_checks,
+    total_mismatch_severity,
 )
+
+SETTINGS = AuditCheckSettings()
 
 
 def _field(name: str, value, quote: str | None = None, paragraph: str = "doc1_p1_para1") -> FieldSnapshot:
@@ -69,9 +74,7 @@ def test_matching_invoice_and_po_have_no_findings() -> None:
     findings = check_invoice_against_po(
         _invoice(),
         _purchase_order(),
-        amount_tolerance=0.01,
-        vendor_match_threshold=85,
-        line_item_match_threshold=80,
+        settings=SETTINGS,
     )
     assert findings == []
 
@@ -80,9 +83,7 @@ def test_vendor_mismatch() -> None:
     findings = check_invoice_against_po(
         _invoice(vendor_name=_field("vendor_name", "Globex Corp")),
         _purchase_order(),
-        amount_tolerance=0.01,
-        vendor_match_threshold=85,
-        line_item_match_threshold=80,
+        settings=SETTINGS,
     )
     assert any(finding.check_type == "vendor_mismatch" for finding in findings)
     finding = next(item for item in findings if item.check_type == "vendor_mismatch")
@@ -98,22 +99,67 @@ def test_total_mismatch_beyond_tolerance() -> None:
     findings = check_invoice_against_po(
         _invoice(total=_field("total", 150.0)),
         _purchase_order(),
-        amount_tolerance=0.01,
-        vendor_match_threshold=85,
-        line_item_match_threshold=80,
+        settings=SETTINGS,
     )
-    assert any(finding.check_type == "total_mismatch" for finding in findings)
+    finding = next(item for item in findings if item.check_type == "total_mismatch")
+    assert finding.severity == "high"
+
+
+def test_total_mismatch_at_or_below_five_percent_is_medium() -> None:
+    findings = check_invoice_against_po(
+        _invoice(total=_field("total", 110.0)),
+        _purchase_order(total=_field("total", 108.0, paragraph="doc2_p1_para4")),
+        settings=SETTINGS,
+    )
+    finding = next(item for item in findings if item.check_type == "total_mismatch")
+    assert finding.severity == "medium"
+
+
+def test_total_mismatch_high_percent_is_configurable() -> None:
+    tight = AuditCheckSettings(total_mismatch_high_percent=1.0)
+    findings = check_invoice_against_po(
+        _invoice(total=_field("total", 110.0)),
+        _purchase_order(),
+        settings=tight,
+    )
+    finding = next(item for item in findings if item.check_type == "total_mismatch")
+    assert finding.severity == "high"
+    assert total_mismatch_severity(110.0, 108.0, 5.0) == "medium"
+    assert total_mismatch_severity(113.4, 108.0, 5.0) == "medium"
+    assert total_mismatch_severity(113.41, 108.0, 5.0) == "high"
 
 
 def test_invoice_dated_before_po() -> None:
     findings = check_invoice_against_po(
         _invoice(invoice_date=_field("invoice_date", "December 1, 2015")),
         _purchase_order(),
-        amount_tolerance=0.01,
-        vendor_match_threshold=85,
-        line_item_match_threshold=80,
+        settings=SETTINGS,
     )
-    assert any(finding.check_type == "invoice_dated_before_po" for finding in findings)
+    finding = next(item for item in findings if item.check_type == "invoice_dated_before_po")
+    assert finding.severity == "medium"
+
+
+def test_invoice_dated_before_po_within_seven_days_is_low() -> None:
+    findings = check_invoice_against_po(
+        _invoice(invoice_date=_field("invoice_date", "January 25, 2016")),
+        _purchase_order(order_date=_field("order_date", "January 28, 2016", paragraph="doc2_p1_para3")),
+        settings=SETTINGS,
+    )
+    finding = next(item for item in findings if item.check_type == "invoice_dated_before_po")
+    assert finding.severity == "low"
+    assert invoice_before_po_severity(7, 7) == "low"
+    assert invoice_before_po_severity(8, 7) == "medium"
+
+
+def test_invoice_before_po_low_days_is_configurable() -> None:
+    settings = AuditCheckSettings(invoice_before_po_low_days=2)
+    findings = check_invoice_against_po(
+        _invoice(invoice_date=_field("invoice_date", "January 25, 2016")),
+        _purchase_order(order_date=_field("order_date", "January 28, 2016", paragraph="doc2_p1_para3")),
+        settings=settings,
+    )
+    finding = next(item for item in findings if item.check_type == "invoice_dated_before_po")
+    assert finding.severity == "medium"
 
 
 def test_line_item_quantity_and_price_mismatch() -> None:
@@ -126,13 +172,11 @@ def test_line_item_quantity_and_price_mismatch() -> None:
     findings = check_invoice_against_po(
         invoice,
         _purchase_order(),
-        amount_tolerance=0.01,
-        vendor_match_threshold=85,
-        line_item_match_threshold=80,
+        settings=SETTINGS,
     )
-    types = {finding.check_type for finding in findings}
-    assert "line_item_quantity_mismatch" in types
-    assert "line_item_price_mismatch" in types
+    by_type = {finding.check_type: finding for finding in findings}
+    assert by_type["line_item_quantity_mismatch"].severity == "medium"
+    assert by_type["line_item_price_mismatch"].severity == "medium"
 
 
 def test_duplicate_invoice_numbers() -> None:
@@ -150,13 +194,12 @@ def test_duplicate_invoice_numbers() -> None:
     findings = check_duplicate_invoice_numbers([first, second])
     assert len(findings) == 2
     assert all(finding.check_type == "duplicate_invoice_number" for finding in findings)
+    assert all(finding.severity == "high" for finding in findings)
 
 
 def test_run_audit_checks_links_by_po_number() -> None:
     findings = run_audit_checks(
         [_invoice(total=_field("total", 200.0)), _purchase_order()],
-        amount_tolerance=0.01,
-        vendor_match_threshold=85,
-        line_item_match_threshold=80,
+        settings=SETTINGS,
     )
     assert any(finding.check_type == "total_mismatch" for finding in findings)

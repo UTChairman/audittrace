@@ -36,6 +36,15 @@ class FindingDraft:
     field_citations: list[dict[str, Any]]
 
 
+@dataclass(frozen=True)
+class AuditCheckSettings:
+    amount_tolerance: float = 0.01
+    vendor_match_threshold: int = 85
+    line_item_match_threshold: int = 80
+    total_mismatch_high_percent: float = 5.0
+    invoice_before_po_low_days: int = 7
+
+
 def normalize_key(value: Any | None) -> str | None:
     if value is None:
         return None
@@ -179,28 +188,39 @@ def check_duplicate_invoice_numbers(documents: list[ExtractedDocument]) -> list[
     return findings
 
 
+def total_mismatch_severity(
+    invoice_total: float,
+    po_total: float,
+    high_percent: float,
+) -> str:
+    """High when the difference is above high_percent of the PO total; otherwise medium."""
+    if po_total == 0:
+        return "high" if invoice_total != 0 else "medium"
+    percent = abs(invoice_total - po_total) / abs(po_total) * 100
+    if percent > high_percent + 1e-9:
+        return "high"
+    return "medium"
+
+
+def invoice_before_po_severity(gap_days: int, low_days: int) -> str:
+    if gap_days <= low_days:
+        return "low"
+    return "medium"
+
+
 def check_invoice_against_po(
     invoice: ExtractedDocument,
     purchase_order: ExtractedDocument,
     *,
-    amount_tolerance: float,
-    vendor_match_threshold: int,
-    line_item_match_threshold: int,
+    settings: AuditCheckSettings,
 ) -> list[FindingDraft]:
     findings: list[FindingDraft] = []
     findings.extend(
-        _vendor_mismatch(invoice, purchase_order, vendor_match_threshold)
+        _vendor_mismatch(invoice, purchase_order, settings.vendor_match_threshold)
     )
-    findings.extend(_total_mismatch(invoice, purchase_order, amount_tolerance))
-    findings.extend(_invoice_dated_before_po(invoice, purchase_order))
-    findings.extend(
-        _line_item_differences(
-            invoice,
-            purchase_order,
-            amount_tolerance,
-            line_item_match_threshold,
-        )
-    )
+    findings.extend(_total_mismatch(invoice, purchase_order, settings))
+    findings.extend(_invoice_dated_before_po(invoice, purchase_order, settings))
+    findings.extend(_line_item_differences(invoice, purchase_order, settings))
     return findings
 
 
@@ -242,7 +262,7 @@ def _vendor_mismatch(
 def _total_mismatch(
     invoice: ExtractedDocument,
     purchase_order: ExtractedDocument,
-    tolerance: float,
+    settings: AuditCheckSettings,
 ) -> list[FindingDraft]:
     invoice_total = coerce_number(
         invoice.fields["total"].value if "total" in invoice.fields else None
@@ -252,15 +272,23 @@ def _total_mismatch(
     )
     if invoice_total is None or po_total is None:
         return []
-    if nearly_equal(invoice_total, po_total, tolerance):
+    if nearly_equal(invoice_total, po_total, settings.amount_tolerance):
         return []
+    percent = (
+        0.0
+        if po_total == 0
+        else abs(invoice_total - po_total) / abs(po_total) * 100
+    )
+    severity = total_mismatch_severity(
+        invoice_total, po_total, settings.total_mismatch_high_percent
+    )
     return [
         FindingDraft(
             check_type="total_mismatch",
-            severity="high",
+            severity=severity,
             explanation=(
                 f"Invoice total {invoice_total} differs from purchase order total "
-                f"{po_total} by more than the allowed tolerance of {tolerance}."
+                f"{po_total} by {percent:.1f}% of the PO total."
             ),
             document_id=invoice.document_id,
             related_document_id=purchase_order.document_id,
@@ -275,6 +303,7 @@ def _total_mismatch(
 def _invoice_dated_before_po(
     invoice: ExtractedDocument,
     purchase_order: ExtractedDocument,
+    settings: AuditCheckSettings,
 ) -> list[FindingDraft]:
     invoice_date = parse_document_date(
         invoice.fields["invoice_date"].value if "invoice_date" in invoice.fields else None
@@ -288,13 +317,18 @@ def _invoice_dated_before_po(
         return []
     if invoice_date >= po_date:
         return []
+    gap_days = (po_date - invoice_date).days
+    severity = invoice_before_po_severity(
+        gap_days, settings.invoice_before_po_low_days
+    )
     return [
         FindingDraft(
             check_type="invoice_dated_before_po",
-            severity="high",
+            severity=severity,
             explanation=(
-                f"Invoice date {invoice_date.isoformat()} is before purchase order "
-                f"date {po_date.isoformat()}."
+                f"Invoice date {invoice_date.isoformat()} is {gap_days} day"
+                f"{'' if gap_days == 1 else 's'} before purchase order date "
+                f"{po_date.isoformat()}."
             ),
             document_id=invoice.document_id,
             related_document_id=purchase_order.document_id,
@@ -309,15 +343,16 @@ def _invoice_dated_before_po(
 def _line_item_differences(
     invoice: ExtractedDocument,
     purchase_order: ExtractedDocument,
-    amount_tolerance: float,
-    match_threshold: int,
+    settings: AuditCheckSettings,
 ) -> list[FindingDraft]:
     invoice_items = collect_line_items(invoice)
     po_items = collect_line_items(purchase_order)
     if not invoice_items or not po_items:
         return []
 
-    matches = match_line_items(invoice_items, po_items, match_threshold)
+    matches = match_line_items(
+        invoice_items, po_items, settings.line_item_match_threshold
+    )
     matched_invoice = {pair[0] for pair in matches}
     findings: list[FindingDraft] = []
 
@@ -329,12 +364,12 @@ def _line_item_differences(
         )
         po_qty = coerce_number(po_item["quantity"].value if po_item["quantity"] else None)
         if invoice_qty is not None and po_qty is not None and not nearly_equal(
-            invoice_qty, po_qty, amount_tolerance
+            invoice_qty, po_qty, settings.amount_tolerance
         ):
             findings.append(
                 FindingDraft(
                     check_type="line_item_quantity_mismatch",
-                    severity="high",
+                    severity="medium",
                     explanation=(
                         f"Quantity for '{_description_text(invoice_item) or f'line {invoice_index}'}' "
                         f"is {invoice_qty} on the invoice and {po_qty} on the purchase order."
@@ -355,12 +390,12 @@ def _line_item_differences(
             po_item["unit_price"].value if po_item["unit_price"] else None
         )
         if invoice_price is not None and po_price is not None and not nearly_equal(
-            invoice_price, po_price, amount_tolerance
+            invoice_price, po_price, settings.amount_tolerance
         ):
             findings.append(
                 FindingDraft(
                     check_type="line_item_price_mismatch",
-                    severity="high",
+                    severity="medium",
                     explanation=(
                         f"Unit price for '{_description_text(invoice_item) or f'line {invoice_index}'}' "
                         f"is {invoice_price} on the invoice and {po_price} on the purchase order."
@@ -418,9 +453,7 @@ def _line_citation(
 def run_audit_checks(
     documents: list[ExtractedDocument],
     *,
-    amount_tolerance: float,
-    vendor_match_threshold: int,
-    line_item_match_threshold: int,
+    settings: AuditCheckSettings,
 ) -> list[FindingDraft]:
     findings = check_duplicate_invoice_numbers(documents)
     invoices = [doc for doc in documents if doc.document_type == "invoice"]
@@ -449,9 +482,7 @@ def run_audit_checks(
                 check_invoice_against_po(
                     invoice,
                     purchase_order,
-                    amount_tolerance=amount_tolerance,
-                    vendor_match_threshold=vendor_match_threshold,
-                    line_item_match_threshold=line_item_match_threshold,
+                    settings=settings,
                 )
             )
     return findings

@@ -24,6 +24,8 @@ class Settings:
     amount_tolerance: float
     vendor_match_threshold: int
     line_item_match_threshold: int
+    total_mismatch_high_percent: float
+    invoice_before_po_low_days: int
     database_url: str
 
     @property
@@ -44,6 +46,8 @@ def get_settings() -> Settings:
         amount_tolerance=float(os.getenv("AMOUNT_TOLERANCE", "0.01")),
         vendor_match_threshold=int(os.getenv("VENDOR_MATCH_THRESHOLD", "85")),
         line_item_match_threshold=int(os.getenv("LINE_ITEM_MATCH_THRESHOLD", "80")),
+        total_mismatch_high_percent=float(os.getenv("TOTAL_MISMATCH_HIGH_PERCENT", "5")),
+        invoice_before_po_low_days=int(os.getenv("INVOICE_BEFORE_PO_LOW_DAYS", "7")),
         database_url=os.getenv("DATABASE_URL", f"sqlite:///{db_path.as_posix()}"),
     )
 
