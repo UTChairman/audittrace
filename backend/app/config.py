@@ -20,6 +20,8 @@ class Settings:
     gemini_model: str
     max_upload_size_mb: int
     max_pdf_pages: int
+    citation_match_threshold: int
+    amount_tolerance: float
     database_url: str
 
     @property
@@ -33,9 +35,11 @@ def get_settings() -> Settings:
     return Settings(
         gemini_api_key=os.getenv("GEMINI_API_KEY", ""),
         google_vision_api_key=os.getenv("GOOGLE_VISION_API_KEY", ""),
-        gemini_model=os.getenv("GEMINI_MODEL", "gemini-2.0-flash"),
+        gemini_model=os.getenv("GEMINI_MODEL", "gemini-2.5-flash"),
         max_upload_size_mb=int(os.getenv("MAX_UPLOAD_SIZE_MB", "20")),
         max_pdf_pages=int(os.getenv("MAX_PDF_PAGES", "30")),
+        citation_match_threshold=int(os.getenv("CITATION_MATCH_THRESHOLD", "85")),
+        amount_tolerance=float(os.getenv("AMOUNT_TOLERANCE", "0.01")),
         database_url=os.getenv("DATABASE_URL", f"sqlite:///{db_path.as_posix()}"),
     )
 
