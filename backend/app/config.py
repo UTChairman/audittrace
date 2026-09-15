@@ -35,7 +35,7 @@ def get_settings() -> Settings:
     return Settings(
         gemini_api_key=os.getenv("GEMINI_API_KEY", ""),
         google_vision_api_key=os.getenv("GOOGLE_VISION_API_KEY", ""),
-        gemini_model=os.getenv("GEMINI_MODEL", "gemini-2.5-flash"),
+        gemini_model=os.getenv("GEMINI_MODEL", "gemini-3.6-flash"),
         max_upload_size_mb=int(os.getenv("MAX_UPLOAD_SIZE_MB", "20")),
         max_pdf_pages=int(os.getenv("MAX_PDF_PAGES", "30")),
         citation_match_threshold=int(os.getenv("CITATION_MATCH_THRESHOLD", "85")),
