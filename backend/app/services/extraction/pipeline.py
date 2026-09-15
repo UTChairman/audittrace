@@ -262,6 +262,14 @@ def get_latest_extraction(db: Session, document_id: int) -> ExtractionOut:
                     validation_flags=flags,
                     confidence_score=row.confidence_score,
                     review_status=row.review_status,
+                    original_ai_value=(
+                        json.loads(row.original_ai_value)
+                        if row.original_ai_value is not None
+                        else None
+                    ),
+                    edited_value=(
+                        json.loads(row.edited_value) if row.edited_value is not None else None
+                    ),
                 )
             )
 

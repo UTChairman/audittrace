@@ -71,6 +71,8 @@ class ExtractedFieldOut(BaseModel):
     validation_flags: list[ValidationFlag]
     confidence_score: float
     review_status: str
+    original_ai_value: Any | None = None
+    edited_value: Any | None = None
 
 
 class ExtractionOut(BaseModel):

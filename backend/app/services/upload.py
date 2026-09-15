@@ -168,12 +168,17 @@ def get_document(db: Session, document_id: int) -> DocumentOut:
     )
 
 
+def list_documents(db: Session) -> list[DocumentOut]:
+    rows = db.query(Document).order_by(Document.id.desc()).all()
+    return [get_document(db, row.id) for row in rows]
+
+
 def get_document_ocr(db: Session, document_id: int) -> DocumentOcrOut:
     document = db.get(Document, document_id)
     if document is None:
         raise HTTPException(status_code=404, detail="Document not found")
 
-    if document.status != "ocr_complete" or document.ocr_cache_id is None:
+    if document.ocr_cache_id is None:
         raise HTTPException(
             status_code=409,
             detail=f"OCR not ready. Current status: {document.status}",

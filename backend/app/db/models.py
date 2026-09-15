@@ -273,6 +273,26 @@ class AuditFinding(Base):
     )
 
 
+class ReviewAction(Base):
+    __tablename__ = "review_actions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    document_id: Mapped[int] = mapped_column(
+        ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    field_id: Mapped[int | None] = mapped_column(
+        ForeignKey("extracted_fields.id", ondelete="SET NULL"), nullable=True
+    )
+    action: Mapped[str] = mapped_column(String(32), nullable=False)
+    actor: Mapped[str] = mapped_column(String(64), nullable=False, default="reviewer")
+    previous_value: Mapped[str | None] = mapped_column(Text, nullable=True)
+    new_value: Mapped[str | None] = mapped_column(Text, nullable=True)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow
+    )
+
+
 settings = get_settings()
 engine = create_engine(
     settings.database_url,
