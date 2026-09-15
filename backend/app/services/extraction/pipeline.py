@@ -160,6 +160,9 @@ async def process_document_extraction(
         if document_type == "unknown":
             _mark_status(db, document, "extracted")
             logger.info("Document %s classified as unknown; skipping extraction", document_id)
+            from app.services.audit.pipeline import run_audit
+
+            run_audit(db)
             return
 
         if document_type == "invoice":
@@ -199,6 +202,9 @@ async def process_document_extraction(
         _save_fields(db, extraction, fields)
         _mark_status(db, document, "extracted")
         logger.info("Document %s extraction complete as %s", document_id, schema_type)
+        from app.services.audit.pipeline import run_audit
+
+        run_audit(db)
     except LLMError as exc:
         db.rollback()
         document = db.get(Document, document_id)
