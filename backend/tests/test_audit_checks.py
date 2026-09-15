@@ -3,6 +3,7 @@ from app.services.audit.checks import (
     ExtractedDocument,
     FieldSnapshot,
     check_duplicate_invoice_numbers,
+    check_duplicate_po_numbers,
     check_invoice_against_po,
     invoice_before_po_severity,
     run_audit_checks,
@@ -203,3 +204,56 @@ def test_run_audit_checks_links_by_po_number() -> None:
         settings=SETTINGS,
     )
     assert any(finding.check_type == "total_mismatch" for finding in findings)
+
+
+def test_duplicate_po_number_cites_every_po_and_still_compares() -> None:
+    matching_po = _purchase_order()
+    mismatching_po = ExtractedDocument(
+        document_id=4,
+        filename="po-duplicate.pdf",
+        document_type="purchase_order",
+        fields={
+            "vendor_name": _field(
+                "vendor_name", "Globex Corp", paragraph="doc4_p1_para1"
+            ),
+            "po_number": _field("po_number", "PO-55", paragraph="doc4_p1_para2"),
+            "order_date": _field(
+                "order_date", "January 1, 2016", paragraph="doc4_p1_para3"
+            ),
+            "total": _field("total", 108.0, paragraph="doc4_p1_para4"),
+            "line_items[0].description": _field(
+                "line_items[0].description", "Widgets", paragraph="doc4_p1_para5"
+            ),
+            "line_items[0].quantity": _field(
+                "line_items[0].quantity", 2, paragraph="doc4_p1_para6"
+            ),
+            "line_items[0].unit_price": _field(
+                "line_items[0].unit_price", 50.0, paragraph="doc4_p1_para7"
+            ),
+            "line_items[0].amount": _field(
+                "line_items[0].amount", 100.0, paragraph="doc4_p1_para8"
+            ),
+        },
+    )
+    findings = run_audit_checks(
+        [_invoice(), matching_po, mismatching_po],
+        settings=SETTINGS,
+    )
+    duplicates = [item for item in findings if item.check_type == "duplicate_po_number"]
+    assert len(duplicates) == 2
+    assert all(item.severity == "high" for item in duplicates)
+    cited_ids = {
+        citation["document_id"]
+        for item in duplicates
+        for citation in item.field_citations
+    }
+    assert cited_ids == {2, 4}
+    assert all(
+        citation["field_name"] == "po_number"
+        for item in duplicates
+        for citation in item.field_citations
+    )
+    vendor_findings = [item for item in findings if item.check_type == "vendor_mismatch"]
+    assert any(item.related_document_id == 4 for item in vendor_findings)
+    assert check_duplicate_po_numbers([_invoice(), matching_po]) == []
+

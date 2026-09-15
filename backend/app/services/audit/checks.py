@@ -188,6 +188,45 @@ def check_duplicate_invoice_numbers(documents: list[ExtractedDocument]) -> list[
     return findings
 
 
+def check_duplicate_po_numbers(documents: list[ExtractedDocument]) -> list[FindingDraft]:
+    purchase_orders = [
+        doc for doc in documents if doc.document_type == "purchase_order"
+    ]
+    grouped: dict[str, list[ExtractedDocument]] = {}
+    for purchase_order in purchase_orders:
+        number = normalize_key(
+            purchase_order.fields["po_number"].value
+            if "po_number" in purchase_order.fields
+            else None
+        )
+        if number is None:
+            continue
+        grouped.setdefault(number, []).append(purchase_order)
+
+    findings: list[FindingDraft] = []
+    for number, group in grouped.items():
+        if len(group) < 2:
+            continue
+        citations = [citation_for(purchase_order, "po_number") for purchase_order in group]
+        names = ", ".join(purchase_order.filename for purchase_order in group)
+        for index, purchase_order in enumerate(group):
+            other = group[0] if index > 0 else group[1]
+            findings.append(
+                FindingDraft(
+                    check_type="duplicate_po_number",
+                    severity="high",
+                    explanation=(
+                        f"Purchase order number {number} appears on more than one document "
+                        f"({names}). Comparison checks still run against each PO."
+                    ),
+                    document_id=purchase_order.document_id,
+                    related_document_id=other.document_id,
+                    field_citations=citations,
+                )
+            )
+    return findings
+
+
 def total_mismatch_severity(
     invoice_total: float,
     po_total: float,
@@ -456,6 +495,7 @@ def run_audit_checks(
     settings: AuditCheckSettings,
 ) -> list[FindingDraft]:
     findings = check_duplicate_invoice_numbers(documents)
+    findings.extend(check_duplicate_po_numbers(documents))
     invoices = [doc for doc in documents if doc.document_type == "invoice"]
     purchase_orders = [
         doc for doc in documents if doc.document_type == "purchase_order"
