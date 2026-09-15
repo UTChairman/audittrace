@@ -25,6 +25,7 @@ class ExtractedDocument:
     filename: str
     document_type: str
     fields: dict[str, FieldSnapshot]
+    duplicate_of_document_id: int | None = None
 
 
 @dataclass
@@ -160,8 +161,60 @@ def match_line_items(
     return matches
 
 
+def _document_identity_citation(document: ExtractedDocument) -> dict[str, Any]:
+    if "invoice_number" in document.fields:
+        return citation_for(document, "invoice_number")
+    if "po_number" in document.fields:
+        return citation_for(document, "po_number")
+    return {
+        "document_id": document.document_id,
+        "field_name": "filename",
+        "value": document.filename,
+        "source_paragraph_ids": [],
+        "supporting_quote": None,
+    }
+
+
+def check_duplicate_documents(documents: list[ExtractedDocument]) -> list[FindingDraft]:
+    by_id = {document.document_id: document for document in documents}
+    copies_by_original: dict[int, list[ExtractedDocument]] = {}
+    for document in documents:
+        original_id = document.duplicate_of_document_id
+        if original_id is None:
+            continue
+        copies_by_original.setdefault(original_id, []).append(document)
+
+    findings: list[FindingDraft] = []
+    for original_id, copies in copies_by_original.items():
+        original = by_id.get(original_id)
+        group = [original, *copies] if original is not None else copies
+        names = ", ".join(document.filename for document in group)
+        primary = original or copies[0]
+        related = copies[0] if original is not None else (
+            copies[1] if len(copies) > 1 else None
+        )
+        findings.append(
+            FindingDraft(
+                check_type="duplicate_document",
+                severity="high",
+                explanation=(
+                    f"The same file was uploaded more than once ({names}) "
+                    "and may indicate a double payment risk."
+                ),
+                document_id=primary.document_id,
+                related_document_id=related.document_id if related is not None else None,
+                field_citations=[_document_identity_citation(document) for document in group],
+            )
+        )
+    return findings
+
+
 def check_duplicate_invoice_numbers(documents: list[ExtractedDocument]) -> list[FindingDraft]:
-    invoices = [doc for doc in documents if doc.document_type == "invoice"]
+    invoices = [
+        doc
+        for doc in documents
+        if doc.document_type == "invoice" and doc.duplicate_of_document_id is None
+    ]
     grouped: dict[str, list[ExtractedDocument]] = {}
     for invoice in invoices:
         number = normalize_key(
@@ -197,7 +250,9 @@ def check_duplicate_invoice_numbers(documents: list[ExtractedDocument]) -> list[
 
 def check_duplicate_po_numbers(documents: list[ExtractedDocument]) -> list[FindingDraft]:
     purchase_orders = [
-        doc for doc in documents if doc.document_type == "purchase_order"
+        doc
+        for doc in documents
+        if doc.document_type == "purchase_order" and doc.duplicate_of_document_id is None
     ]
     grouped: dict[str, list[ExtractedDocument]] = {}
     for purchase_order in purchase_orders:
@@ -499,11 +554,13 @@ def run_audit_checks(
     *,
     settings: AuditCheckSettings,
 ) -> list[FindingDraft]:
-    findings = check_duplicate_invoice_numbers(documents)
+    findings = check_duplicate_documents(documents)
+    findings.extend(check_duplicate_invoice_numbers(documents))
     findings.extend(check_duplicate_po_numbers(documents))
-    invoices = [doc for doc in documents if doc.document_type == "invoice"]
+    comparable = [doc for doc in documents if doc.duplicate_of_document_id is None]
+    invoices = [doc for doc in comparable if doc.document_type == "invoice"]
     purchase_orders = [
-        doc for doc in documents if doc.document_type == "purchase_order"
+        doc for doc in comparable if doc.document_type == "purchase_order"
     ]
     pos_by_number: dict[str, list[ExtractedDocument]] = {}
     for purchase_order in purchase_orders:

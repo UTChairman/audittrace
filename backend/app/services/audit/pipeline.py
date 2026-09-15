@@ -73,6 +73,7 @@ def load_extracted_documents(db: Session) -> list[ExtractedDocument]:
                 filename=document.filename,
                 document_type=classification.document_type,
                 fields=fields,
+                duplicate_of_document_id=document.duplicate_of_document_id,
             )
         )
     return loaded

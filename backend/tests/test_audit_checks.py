@@ -2,6 +2,7 @@ from app.services.audit.checks import (
     AuditCheckSettings,
     ExtractedDocument,
     FieldSnapshot,
+    check_duplicate_documents,
     check_duplicate_invoice_numbers,
     check_duplicate_po_numbers,
     check_invoice_against_po,
@@ -280,4 +281,46 @@ def test_duplicate_po_number_cites_every_po_and_still_compares() -> None:
     vendor_findings = [item for item in findings if item.check_type == "vendor_mismatch"]
     assert any(item.related_document_id == 4 for item in vendor_findings)
     assert check_duplicate_po_numbers([_invoice(), matching_po]) == []
+
+
+def test_file_duplicate_creates_duplicate_document_and_skips_copy_checks() -> None:
+    original = _invoice()
+    copy = ExtractedDocument(
+        document_id=2,
+        filename="invoice-copy.pdf",
+        document_type="invoice",
+        fields=dict(original.fields),
+        duplicate_of_document_id=1,
+    )
+    purchase_order = _purchase_order()
+    findings = run_audit_checks([original, copy, purchase_order], settings=SETTINGS)
+    types = {item.check_type for item in findings}
+    assert types == {"duplicate_document"}
+    finding = findings[0]
+    assert finding.severity == "high"
+    assert finding.document_id == 1
+    assert finding.related_document_id == 2
+    assert "double payment" in finding.explanation
+    cited_ids = {citation["document_id"] for citation in finding.field_citations}
+    assert cited_ids == {1, 2}
+    assert check_duplicate_documents([original, copy])[0].check_type == "duplicate_document"
+    assert check_duplicate_invoice_numbers([original, copy]) == []
+
+
+def test_different_files_sharing_invoice_number_still_flag() -> None:
+    first = _invoice()
+    other_file = ExtractedDocument(
+        document_id=9,
+        filename="other-invoice.pdf",
+        document_type="invoice",
+        fields={
+            "invoice_number": _field(
+                "invoice_number", "INV-1001", paragraph="doc9_p1_para1"
+            )
+        },
+        duplicate_of_document_id=None,
+    )
+    findings = check_duplicate_invoice_numbers([first, other_file])
+    assert len(findings) == 1
+    assert findings[0].check_type == "duplicate_invoice_number"
 
