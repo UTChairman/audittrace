@@ -3,7 +3,9 @@ from pydantic import BaseModel
 
 from app.llm.base import (
     LLMBillingError,
+    LLMError,
     LLMInvalidOutputError,
+    LLMModelNotFoundError,
     LLMPermissionError,
     LLMRateLimitError,
     LLMUnavailableError,
@@ -12,6 +14,7 @@ from app.llm.gemini import (
     GeminiProvider,
     billing_error_message,
     is_billing_error,
+    is_model_not_found_error,
     is_permission_error,
     is_rate_limit_error,
     is_unavailable_error,
@@ -299,4 +302,49 @@ async def test_fallback_failure_keeps_clear_503_message() -> None:
     assert "Gemini temporarily unavailable (503) after 2 retries, try again later" in message
     assert "fallback-model" in message
     assert "Unexpected error" not in message
+    assert "AIza" not in message
+
+
+def test_404_no_longer_available_is_not_transient() -> None:
+    exc = _FakeServerError(
+        404,
+        "NOT_FOUND",
+        "This model models/gemini-2.5-flash is no longer available to new users.",
+    )
+    assert is_model_not_found_error(exc) is True
+    assert is_unavailable_error(exc) is False
+    assert is_rate_limit_error(exc) is False
+    wrapped = wrap_gemini_exception(exc)
+    assert isinstance(wrapped, LLMModelNotFoundError)
+    assert "404" in str(wrapped)
+
+
+@pytest.mark.asyncio
+async def test_fallback_404_asks_to_set_env_and_is_not_retried() -> None:
+    attempts = {"fallback": 0}
+
+    async def generate_content(*, model: str, contents: str, config) -> _FakeResponse:
+        if model == "primary-model":
+            raise _FakeServerError(503, "UNAVAILABLE", "high demand")
+        attempts["fallback"] += 1
+        raise _FakeServerError(
+            404,
+            "NOT_FOUND",
+            "This model models/gemini-2.5-flash is no longer available to new users.",
+        )
+
+    provider = GeminiProvider(
+        client=_FakeClient(generate_content),
+        model="primary-model",
+        fallback_model="gemini-2.5-flash",
+        max_transient_attempts=2,
+        retry_initial_delay_seconds=0.01,
+        retry_max_delay_seconds=0.02,
+    )
+    with pytest.raises(LLMError, match="Set GEMINI_FALLBACK_MODEL") as raised:
+        await provider.generate_structured("extract", _Ping)
+    assert attempts["fallback"] == 1
+    message = str(raised.value)
+    assert "gemini-2.5-flash" in message
+    assert "404" in message
     assert "AIza" not in message

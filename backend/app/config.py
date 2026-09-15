@@ -43,7 +43,9 @@ def get_settings() -> Settings:
         gemini_api_key=os.getenv("GEMINI_API_KEY", ""),
         google_vision_api_key=os.getenv("GOOGLE_VISION_API_KEY", ""),
         gemini_model=os.getenv("GEMINI_MODEL", "gemini-3.6-flash"),
-        gemini_fallback_model=os.getenv("GEMINI_FALLBACK_MODEL", "gemini-2.5-flash").strip(),
+        gemini_fallback_model=os.getenv(
+            "GEMINI_FALLBACK_MODEL", "gemini-3.5-flash-lite"
+        ).strip(),
         gemini_max_transient_attempts=int(os.getenv("GEMINI_MAX_TRANSIENT_ATTEMPTS", "5")),
         max_upload_size_mb=int(os.getenv("MAX_UPLOAD_SIZE_MB", "20")),
         max_pdf_pages=int(os.getenv("MAX_PDF_PAGES", "30")),

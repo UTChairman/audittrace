@@ -40,6 +40,10 @@ class LLMPermissionError(LLMError):
     """Raised on 401/403 or API-key permission failures that should fail fast."""
 
 
+class LLMModelNotFoundError(LLMError):
+    """Raised when the requested Gemini model returns 404 NOT_FOUND."""
+
+
 class LLMInvalidOutputError(LLMError):
     """Raised when structured output is missing or fails schema validation."""
 

@@ -11,6 +11,7 @@ from app.llm.base import (
     LLMBillingError,
     LLMError,
     LLMInvalidOutputError,
+    LLMModelNotFoundError,
     LLMPermissionError,
     LLMRateLimitError,
     LLMUnavailableError,
@@ -68,7 +69,7 @@ def status_code_from_exception(exc: Exception) -> int | None:
         return code
     if isinstance(code, str) and code.isdigit():
         return int(code)
-    match = re.search(r"\b(401|403|429|500|502|503|504)\b", str(exc))
+    match = re.search(r"\b(401|403|404|429|500|502|503|504)\b", str(exc))
     return int(match.group(1)) if match else None
 
 
@@ -108,9 +109,30 @@ def is_network_error(exc: Exception) -> bool:
     return any(token in name for token in ("connecterror", "connectionerror", "networkerror"))
 
 
+def is_model_not_found_error(exc: Exception) -> bool:
+    """404 / NOT_FOUND, including models no longer available to new users."""
+    if is_billing_error(exc) or is_permission_error(exc):
+        return False
+    code = status_code_from_exception(exc)
+    if code == 404:
+        return True
+    status = str(getattr(exc, "status", "") or "").upper()
+    if status == "NOT_FOUND":
+        return True
+    text = str(exc).lower()
+    return "no longer available" in text
+
+
+def fallback_model_not_found_message(model: str) -> str:
+    return (
+        f"Fallback Gemini model '{model}' is not available (404). "
+        "Set GEMINI_FALLBACK_MODEL in .env to a current Flash or Flash Lite model."
+    )
+
+
 def is_unavailable_error(exc: Exception) -> bool:
     """503 UNAVAILABLE, 500 internal, and network timeouts — retryable."""
-    if is_billing_error(exc) or is_permission_error(exc):
+    if is_billing_error(exc) or is_permission_error(exc) or is_model_not_found_error(exc):
         return False
     if is_timeout_error(exc) or is_network_error(exc):
         return True
@@ -188,6 +210,8 @@ def wrap_gemini_exception(exc: Exception) -> LLMError:
         return LLMBillingError(billing_error_message(exc))
     if is_permission_error(exc):
         return LLMPermissionError(permission_error_message(exc))
+    if is_model_not_found_error(exc):
+        return LLMModelNotFoundError("Gemini model is not available (404).")
     if is_unavailable_error(exc):
         return LLMUnavailableError(unavailable_error_message(exc))
     if is_rate_limit_error(exc):
@@ -269,6 +293,15 @@ class GeminiProvider:
                 return await self._generate_once(
                     self._fallback_model, prompt, response_schema, system_instruction
                 )
+            except LLMModelNotFoundError as fallback_exc:
+                logger.warning(
+                    "Fallback Gemini model %s returned 404 and is not available to this API key. "
+                    "Set GEMINI_FALLBACK_MODEL in .env to a current Flash or Flash Lite model.",
+                    self._fallback_model,
+                )
+                raise LLMError(
+                    fallback_model_not_found_message(self._fallback_model)
+                ) from fallback_exc
             except (LLMUnavailableError, LLMRateLimitError) as fallback_exc:
                 raise LLMUnavailableError(
                     f"{exc} Fallback model {self._fallback_model} also failed."
@@ -292,7 +325,12 @@ class GeminiProvider:
                 ),
             )
         except Exception as exc:
-            raise wrap_gemini_exception(exc) from exc
+            wrapped = wrap_gemini_exception(exc)
+            if isinstance(wrapped, LLMModelNotFoundError):
+                raise LLMModelNotFoundError(
+                    f"Gemini model '{model}' is not available (404)."
+                ) from exc
+            raise wrapped from exc
 
         usage_metadata = getattr(response, "usage_metadata", None)
         usage = LLMUsage(
