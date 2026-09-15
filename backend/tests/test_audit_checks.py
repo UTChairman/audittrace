@@ -1,3 +1,5 @@
+import re
+
 from app.services.audit.checks import (
     AuditCheckSettings,
     ExtractedDocument,
@@ -93,6 +95,8 @@ def test_vendor_mismatch() -> None:
     assert "Vendor on" in finding.explanation
     assert "Vendoron" not in finding.explanation
     assert "match vendor" in finding.explanation
+    assert re.search(r"similarity \d+", finding.explanation)
+    assert "similarity48" not in finding.explanation
     assert finding.field_citations[0]["field_name"] == "vendor_name"
     assert finding.field_citations[1]["document_id"] == 2
 

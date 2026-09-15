@@ -198,9 +198,9 @@ def check_duplicate_documents(documents: list[ExtractedDocument]) -> list[Findin
                 check_type="duplicate_document",
                 severity="high",
                 explanation=(
-                    f"The same file was uploaded more than once ({names}) "
+                    "The same file was uploaded more than once ({names}) "
                     "and may indicate a double payment risk."
-                ),
+                ).format(names=names),
                 document_id=primary.document_id,
                 related_document_id=related.document_id if related is not None else None,
                 field_citations=[_document_identity_citation(document) for document in group],
@@ -344,9 +344,12 @@ def _vendor_mismatch(
             check_type="vendor_mismatch",
             severity="high",
             explanation=(
-                "Vendor on invoice "
-                f"'{invoice_vendor.value}' does not match vendor on purchase order "
-                f"'{po_vendor.value}' (similarity {score:.0f})."
+                "Vendor on invoice '{invoice_vendor}' does not match vendor on "
+                "purchase order '{po_vendor}' (similarity {score})."
+            ).format(
+                invoice_vendor=invoice_vendor.value,
+                po_vendor=po_vendor.value,
+                score=f"{score:.0f}",
             ),
             document_id=invoice.document_id,
             related_document_id=purchase_order.document_id,
@@ -386,8 +389,12 @@ def _total_mismatch(
             check_type="total_mismatch",
             severity=severity,
             explanation=(
-                f"Invoice total {invoice_total} differs from purchase order total "
-                f"{po_total} by {percent:.1f}% of the PO total."
+                "Invoice total {invoice_total} differs from purchase order total "
+                "{po_total} by {percent}% of the PO total."
+            ).format(
+                invoice_total=invoice_total,
+                po_total=po_total,
+                percent=f"{percent:.1f}",
             ),
             document_id=invoice.document_id,
             related_document_id=purchase_order.document_id,
@@ -425,9 +432,13 @@ def _invoice_dated_before_po(
             check_type="invoice_dated_before_po",
             severity=severity,
             explanation=(
-                f"Invoice date {invoice_date.isoformat()} is {gap_days} day"
-                f"{'' if gap_days == 1 else 's'} before purchase order date "
-                f"{po_date.isoformat()}."
+                "Invoice date {invoice_date} is {gap_days} {day_word} before "
+                "purchase order date {po_date}."
+            ).format(
+                invoice_date=invoice_date.isoformat(),
+                gap_days=gap_days,
+                day_word="day" if gap_days == 1 else "days",
+                po_date=po_date.isoformat(),
             ),
             document_id=invoice.document_id,
             related_document_id=purchase_order.document_id,
@@ -470,8 +481,12 @@ def _line_item_differences(
                     check_type="line_item_quantity_mismatch",
                     severity="medium",
                     explanation=(
-                        f"Quantity for '{_description_text(invoice_item) or f'line {invoice_index}'}' "
-                        f"is {invoice_qty} on the invoice and {po_qty} on the purchase order."
+                        "Quantity for '{description}' is {invoice_qty} on the invoice "
+                        "and {po_qty} on the purchase order."
+                    ).format(
+                        description=_description_text(invoice_item) or f"line {invoice_index}",
+                        invoice_qty=invoice_qty,
+                        po_qty=po_qty,
                     ),
                     document_id=invoice.document_id,
                     related_document_id=purchase_order.document_id,
@@ -496,8 +511,12 @@ def _line_item_differences(
                     check_type="line_item_price_mismatch",
                     severity="medium",
                     explanation=(
-                        f"Unit price for '{_description_text(invoice_item) or f'line {invoice_index}'}' "
-                        f"is {invoice_price} on the invoice and {po_price} on the purchase order."
+                        "Unit price for '{description}' is {invoice_price} on the invoice "
+                        "and {po_price} on the purchase order."
+                    ).format(
+                        description=_description_text(invoice_item) or f"line {invoice_index}",
+                        invoice_price=invoice_price,
+                        po_price=po_price,
                     ),
                     document_id=invoice.document_id,
                     related_document_id=purchase_order.document_id,
