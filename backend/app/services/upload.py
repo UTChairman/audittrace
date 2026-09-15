@@ -6,7 +6,15 @@ from fastapi import BackgroundTasks, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
 from app.config import UPLOADS_DIR, get_settings
-from app.db.models import Document, DocumentPage, OcrBlock, OcrCache, OcrParagraph, OcrWord
+from app.db.models import (
+    Document,
+    DocumentClassification,
+    DocumentPage,
+    OcrBlock,
+    OcrCache,
+    OcrParagraph,
+    OcrWord,
+)
 from app.schemas.ocr import (
     BoundingBox,
     DocumentOcrOut,
@@ -19,7 +27,7 @@ from app.schemas.ocr import (
     UploadDocumentResult,
     UploadResponse,
 )
-from app.services.ingestion import process_document_ocr
+from app.services.ingestion import process_uploaded_document
 from app.utils.files import ALLOWED_CONTENT_TYPES, detect_image_suffix, sanitize_filename, to_data_relative_path
 from app.utils.hashing import build_stable_id, sha256_hex
 
@@ -103,7 +111,7 @@ async def handle_uploads(
         db.commit()
         db.refresh(document)
 
-        background_tasks.add_task(process_document_ocr, document.id)
+        background_tasks.add_task(process_uploaded_document, document.id)
         logger.info("Queued OCR processing for document %s", document.id)
 
         results.append(
@@ -130,6 +138,12 @@ def get_document(db: Session, document_id: int) -> DocumentOut:
         .all()
     )
 
+    classification = (
+        db.query(DocumentClassification)
+        .filter(DocumentClassification.document_id == document_id)
+        .first()
+    )
+
     return DocumentOut(
         id=document.id,
         filename=document.filename,
@@ -141,6 +155,7 @@ def get_document(db: Session, document_id: int) -> DocumentOut:
         ocr_cache_id=document.ocr_cache_id,
         duplicate_of_document_id=document.duplicate_of_document_id,
         error_message=document.error_message,
+        document_type=classification.document_type if classification else None,
         pages=[
             DocumentPageOut(
                 page_number=page.page_number,

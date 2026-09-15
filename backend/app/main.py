@@ -3,7 +3,7 @@ import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routes import documents, health, upload
+from app.api.routes import documents, extraction, health, upload
 from app.config import ensure_data_dirs
 from app.db.models import init_db
 
@@ -27,3 +27,4 @@ app.add_middleware(
 app.include_router(health.router, prefix="/api")
 app.include_router(upload.router, prefix="/api")
 app.include_router(documents.router, prefix="/api")
+app.include_router(extraction.router, prefix="/api")
