@@ -248,6 +248,13 @@ def flatten_line_items(
             document_id,
             match_threshold,
         )
+        detail = verify_cited_string(
+            f"{prefix}.detail",
+            item.detail,
+            paragraphs_by_id,
+            document_id,
+            match_threshold,
+        )
         quantity = verify_cited_number(
             f"{prefix}.quantity",
             item.quantity,
@@ -294,7 +301,7 @@ def flatten_line_items(
                     ocr_confidence=amount.ocr_confidence,
                     has_validation_flags=True,
                 )
-        fields.extend([description, quantity, unit_price, amount])
+        fields.extend([description, detail, quantity, unit_price, amount])
     return fields
 
 

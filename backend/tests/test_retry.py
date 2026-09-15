@@ -348,3 +348,21 @@ async def test_fallback_404_asks_to_set_env_and_is_not_retried() -> None:
     assert "gemini-2.5-flash" in message
     assert "404" in message
     assert "AIza" not in message
+
+
+@pytest.mark.asyncio
+async def test_generate_structured_uses_temperature_zero() -> None:
+    temperatures: list[float | None] = []
+
+    async def generate_content(*, model: str, contents: str, config) -> _FakeResponse:
+        temperatures.append(getattr(config, "temperature", None))
+        return _FakeResponse(_Ping(ok=True))
+
+    provider = GeminiProvider(
+        client=_FakeClient(generate_content),
+        model="primary-model",
+        fallback_model="",
+        max_transient_attempts=1,
+    )
+    await provider.generate_structured("extract", _Ping)
+    assert temperatures == [0]

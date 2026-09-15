@@ -26,6 +26,7 @@ class CitedCurrency(BaseModel):
 
 class LineItemExtraction(BaseModel):
     description: CitedString = Field(default_factory=CitedString)
+    detail: CitedString = Field(default_factory=CitedString)
     quantity: CitedNumber = Field(default_factory=CitedNumber)
     unit_price: CitedNumber = Field(default_factory=CitedNumber)
     amount: CitedNumber = Field(default_factory=CitedNumber)

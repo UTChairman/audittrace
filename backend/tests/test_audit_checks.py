@@ -180,6 +180,32 @@ def test_line_item_quantity_and_price_mismatch() -> None:
     assert by_type["line_item_price_mismatch"].severity == "medium"
 
 
+def test_line_item_match_uses_token_set_ratio_on_normalized_descriptions() -> None:
+    invoice = _invoice(
+        **{
+            "line_items[0].description": _field(
+                "line_items[0].description",
+                "Web Design - This is a sample description...",
+            ),
+            "line_items[0].unit_price": _field("line_items[0].unit_price", 85.0),
+        }
+    )
+    purchase_order = _purchase_order(
+        **{
+            "line_items[0].description": _field(
+                "line_items[0].description", "Web Design", paragraph="doc2_p1_para5"
+            ),
+            "line_items[0].unit_price": _field(
+                "line_items[0].unit_price", 75.0, paragraph="doc2_p1_para7"
+            ),
+        }
+    )
+    findings = check_invoice_against_po(invoice, purchase_order, settings=SETTINGS)
+    types = {finding.check_type for finding in findings}
+    assert "line_item_not_on_po" not in types
+    assert "line_item_price_mismatch" in types
+
+
 def test_duplicate_invoice_numbers() -> None:
     first = _invoice()
     second = ExtractedDocument(

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from typing import Any
@@ -103,6 +104,7 @@ def collect_line_items(document: ExtractedDocument) -> list[dict[str, FieldSnaps
         items.append(
             {
                 "description": document.fields.get(f"{prefix}.description"),
+                "detail": document.fields.get(f"{prefix}.detail"),
                 "quantity": document.fields.get(f"{prefix}.quantity"),
                 "unit_price": document.fields.get(f"{prefix}.unit_price"),
                 "amount": document.fields.get(f"{prefix}.amount"),
@@ -119,6 +121,14 @@ def _description_text(item: dict[str, FieldSnapshot | None]) -> str:
     return str(snapshot.value)
 
 
+def normalize_line_item_description(value: Any | None) -> str:
+    if value is None:
+        return ""
+    text = str(value).casefold()
+    text = re.sub(r"[^a-z0-9]+", " ", text)
+    return " ".join(text.split())
+
+
 def match_line_items(
     invoice_items: list[dict[str, FieldSnapshot | None]],
     po_items: list[dict[str, FieldSnapshot | None]],
@@ -129,14 +139,14 @@ def match_line_items(
     matches: list[tuple[int, int, float]] = []
     candidates: list[tuple[float, int, int]] = []
     for invoice_index, invoice_item in enumerate(invoice_items):
-        invoice_text = _description_text(invoice_item)
+        invoice_text = normalize_line_item_description(_description_text(invoice_item))
         if not invoice_text:
             continue
         for po_index, po_item in enumerate(po_items):
-            po_text = _description_text(po_item)
+            po_text = normalize_line_item_description(_description_text(po_item))
             if not po_text:
                 continue
-            score = float(fuzz.token_sort_ratio(invoice_text, po_text))
+            score = float(fuzz.token_set_ratio(invoice_text, po_text))
             if score >= threshold:
                 candidates.append((score, invoice_index, po_index))
     candidates.sort(reverse=True)

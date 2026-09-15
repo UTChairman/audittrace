@@ -7,6 +7,7 @@ Rules:
 - source_paragraph_ids must be IDs from the provided list, such as doc3_p2_para14.
 - supporting_quote must be a short verbatim snippet from the cited paragraphs, not a paraphrase.
 - Line items are individual ordered rows. Do not invent rows.
+- For each line item, description is the main item name only (for example "Web Design"). Put extra wording, notes, or text after a dash or hyphen into the optional detail field. Never copy the full row sentence into description.
 - Numbers must come from the document. Do not compute missing totals unless the computed figure is written on the page and cited.
 - Dates stay in the document's original format.
 

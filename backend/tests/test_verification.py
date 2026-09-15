@@ -150,6 +150,49 @@ def test_line_item_amount_mismatch_is_flagged() -> None:
     assert any("line_item_amount_mismatch" in flag.reason for flag in amount.validation_flags)
 
 
+def test_flatten_line_items_includes_optional_detail() -> None:
+    paragraph = _paragraph(
+        "doc1_p1_para2",
+        "Web Design - This is a sample description 1 x 85.00",
+    )
+    paragraphs = {paragraph.stable_id: paragraph}
+    items = [
+        LineItemExtraction(
+            description=CitedString(
+                value="Web Design",
+                source_paragraph_ids=["doc1_p1_para2"],
+                supporting_quote="Web Design",
+            ),
+            detail=CitedString(
+                value="This is a sample description",
+                source_paragraph_ids=["doc1_p1_para2"],
+                supporting_quote="This is a sample description",
+            ),
+            quantity=CitedNumber(
+                value=1,
+                source_paragraph_ids=["doc1_p1_para2"],
+                supporting_quote="1",
+            ),
+            unit_price=CitedNumber(
+                value=85.0,
+                source_paragraph_ids=["doc1_p1_para2"],
+                supporting_quote="85.00",
+            ),
+            amount=CitedNumber(
+                value=85.0,
+                source_paragraph_ids=["doc1_p1_para2"],
+                supporting_quote="85.00",
+            ),
+        )
+    ]
+    fields = flatten_line_items(items, paragraphs, 1, 85, 0.01)
+    names = [field.field_name for field in fields]
+    assert "line_items[0].description" in names
+    assert "line_items[0].detail" in names
+    detail = next(field for field in fields if field.field_name == "line_items[0].detail")
+    assert detail.value == "This is a sample description"
+
+
 def test_line_items_sum_and_tax_total_validation() -> None:
     fields = [
         FieldVerification(
