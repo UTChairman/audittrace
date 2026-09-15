@@ -1,9 +1,12 @@
 import json
 
+from dataclasses import dataclass
+
 from sqlalchemy.orm import Session
 
-from app.db.models import OcrBlock, OcrCache, OcrPageResult, OcrParagraph, OcrWord
+from app.db.models import Document, OcrBlock, OcrCache, OcrPageResult, OcrParagraph, OcrWord
 from app.services.ocr.parser import ParsedPage, parse_vision_page_response
+from app.utils.hashing import build_stable_id
 
 
 def delete_parsed_ocr_for_cache(db: Session, ocr_cache_id: int) -> None:
@@ -116,3 +119,43 @@ def reparse_all_ocr_caches(db: Session) -> tuple[int, int]:
         total_pages += reparse_ocr_cache(db, cache_id)
     db.commit()
     return len(cache_ids), total_pages
+
+
+@dataclass(frozen=True)
+class ParagraphWithId:
+    stable_id: str
+    page_number: int
+    page_paragraph_index: int
+    text: str
+    confidence: float | None
+
+
+def list_paragraphs_with_stable_ids(
+    db: Session, document: Document
+) -> list[ParagraphWithId]:
+    """Return OCR paragraphs for a document with generated stable IDs."""
+    if document.ocr_cache_id is None:
+        return []
+
+    paragraphs = (
+        db.query(OcrParagraph)
+        .filter(OcrParagraph.ocr_cache_id == document.ocr_cache_id)
+        .order_by(
+            OcrParagraph.page_number.asc(),
+            OcrParagraph.page_paragraph_index.asc(),
+        )
+        .all()
+    )
+    return [
+        ParagraphWithId(
+            stable_id=build_stable_id(
+                document.id, paragraph.page_number, paragraph.page_paragraph_index
+            ),
+            page_number=paragraph.page_number,
+            page_paragraph_index=paragraph.page_paragraph_index,
+            text=paragraph.text,
+            confidence=paragraph.confidence,
+        )
+        for paragraph in paragraphs
+    ]
+
