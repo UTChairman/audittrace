@@ -53,6 +53,12 @@ class Document(Base):
         back_populates="document", cascade="all, delete-orphan"
     )
     ocr_cache: Mapped["OcrCache | None"] = relationship(back_populates="documents")
+    classification: Mapped["DocumentClassification | None"] = relationship(
+        back_populates="document", cascade="all, delete-orphan", uselist=False
+    )
+    extractions: Mapped[list["Extraction"]] = relationship(
+        back_populates="document", cascade="all, delete-orphan"
+    )
 
 
 class OcrCache(Base):
@@ -173,6 +179,70 @@ class OcrWord(Base):
     confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
 
     paragraph: Mapped[OcrParagraph] = relationship(back_populates="words")
+
+
+class DocumentClassification(Base):
+    __tablename__ = "document_classifications"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    document_id: Mapped[int] = mapped_column(
+        ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, unique=True
+    )
+    document_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    model: Mapped[str] = mapped_column(String(128), nullable=False)
+    input_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    output_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow
+    )
+
+    document: Mapped[Document] = relationship(back_populates="classification")
+
+
+class Extraction(Base):
+    __tablename__ = "extractions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    document_id: Mapped[int] = mapped_column(
+        ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    schema_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    raw_llm_response: Mapped[str] = mapped_column(Text, nullable=False)
+    model: Mapped[str] = mapped_column(String(128), nullable=False)
+    input_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    output_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow
+    )
+
+    document: Mapped[Document] = relationship(back_populates="extractions")
+    fields: Mapped[list["ExtractedField"]] = relationship(
+        back_populates="extraction", cascade="all, delete-orphan"
+    )
+
+
+class ExtractedField(Base):
+    __tablename__ = "extracted_fields"
+    __table_args__ = (UniqueConstraint("extraction_id", "field_name"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    extraction_id: Mapped[int] = mapped_column(
+        ForeignKey("extractions.id", ondelete="CASCADE"), nullable=False
+    )
+    field_name: Mapped[str] = mapped_column(String(128), nullable=False)
+    value_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    source_paragraph_ids: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    supporting_quote: Mapped[str | None] = mapped_column(Text, nullable=True)
+    verification_status: Mapped[str] = mapped_column(String(32), nullable=False)
+    validation_flags: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    confidence_score: Mapped[float] = mapped_column(Float, nullable=False)
+    review_status: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="pending"
+    )
+    original_ai_value: Mapped[str | None] = mapped_column(Text, nullable=True)
+    edited_value: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    extraction: Mapped[Extraction] = relationship(back_populates="fields")
 
 
 settings = get_settings()

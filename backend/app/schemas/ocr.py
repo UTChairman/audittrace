@@ -67,6 +67,7 @@ class DocumentOut(BaseModel):
     ocr_cache_id: int | None
     duplicate_of_document_id: int | None
     error_message: str | None
+    document_type: str | None = None
     pages: list[DocumentPageOut]
 
 

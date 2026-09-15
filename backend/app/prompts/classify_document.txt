@@ -1,0 +1,14 @@
+You are classifying a business document for an internal audit system.
+
+Choose exactly one document_type:
+- invoice
+- purchase_order
+- unknown
+
+Rules:
+- Use only the OCR paragraphs provided.
+- If the document is not clearly an invoice or purchase order, return unknown.
+- Do not guess. Prefer unknown when evidence is weak.
+- Give a short reason citing paragraph IDs you used.
+
+OCR paragraphs follow. Each block starts with a stable paragraph ID.
