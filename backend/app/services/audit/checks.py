@@ -225,9 +225,9 @@ def _vendor_mismatch(
             check_type="vendor_mismatch",
             severity="high",
             explanation=(
-                f"Vendor on invoice '{invoice_vendor.value}' does not match "
-                f"vendor on purchase order '{po_vendor.value}' "
-                f"(similarity {score:.0f})."
+                "Vendor on invoice "
+                f"'{invoice_vendor.value}' does not match vendor on purchase order "
+                f"'{po_vendor.value}' (similarity {score:.0f})."
             ),
             document_id=invoice.document_id,
             related_document_id=purchase_order.document_id,

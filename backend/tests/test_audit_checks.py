@@ -87,6 +87,9 @@ def test_vendor_mismatch() -> None:
     assert any(finding.check_type == "vendor_mismatch" for finding in findings)
     finding = next(item for item in findings if item.check_type == "vendor_mismatch")
     assert finding.severity == "high"
+    assert "Vendor on" in finding.explanation
+    assert "Vendoron" not in finding.explanation
+    assert "match vendor" in finding.explanation
     assert finding.field_citations[0]["field_name"] == "vendor_name"
     assert finding.field_citations[1]["document_id"] == 2
 
