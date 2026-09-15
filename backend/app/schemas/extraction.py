@@ -15,6 +15,15 @@ class CitedNumber(BaseModel):
     supporting_quote: str | None = None
 
 
+class CitedCurrency(BaseModel):
+    value: str | None = None
+    source_paragraph_ids: list[str] = Field(default_factory=list)
+    supporting_quote: str | None = None
+    suggested_value: str | None = None
+    suggested_source_paragraph_ids: list[str] = Field(default_factory=list)
+    suggested_quote: str | None = None
+
+
 class LineItemExtraction(BaseModel):
     description: CitedString = Field(default_factory=CitedString)
     quantity: CitedNumber = Field(default_factory=CitedNumber)
@@ -31,7 +40,7 @@ class InvoiceExtraction(BaseModel):
     subtotal: CitedNumber = Field(default_factory=CitedNumber)
     tax: CitedNumber = Field(default_factory=CitedNumber)
     total: CitedNumber = Field(default_factory=CitedNumber)
-    currency: CitedString = Field(default_factory=CitedString)
+    currency: CitedCurrency = Field(default_factory=CitedCurrency)
 
 
 class PurchaseOrderExtraction(BaseModel):

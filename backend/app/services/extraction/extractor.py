@@ -5,6 +5,7 @@ from app.llm.base import LLMProvider, StructuredLLMResult
 from app.prompts.loader import load_prompt
 from app.schemas.extraction import InvoiceExtraction, PurchaseOrderExtraction
 from app.services.extraction.classifier import format_paragraphs_for_prompt
+from app.services.extraction.currency import verify_currency
 from app.services.extraction.verification import (
     FieldVerification,
     apply_amount_validations,
@@ -19,7 +20,6 @@ INVOICE_STRING_FIELDS = (
     "invoice_number",
     "invoice_date",
     "po_number",
-    "currency",
 )
 INVOICE_NUMBER_FIELDS = ("subtotal", "tax", "total")
 PURCHASE_ORDER_STRING_FIELDS = ("po_number", "vendor_name", "order_date")
@@ -81,6 +81,14 @@ def verify_invoice_extraction(
                 settings.citation_match_threshold,
             )
         )
+    fields.extend(
+        verify_currency(
+            extracted.currency,
+            paragraphs_by_id,
+            document_id,
+            settings.citation_match_threshold,
+        )
+    )
     fields.extend(
         flatten_line_items(
             extracted.line_items,

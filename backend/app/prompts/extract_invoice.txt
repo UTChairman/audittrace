@@ -9,5 +9,7 @@ Rules:
 - Line items are individual billed rows. Do not invent rows.
 - Numbers must come from the document. Do not compute missing totals unless the computed figure is written on the page and cited.
 - Dates stay in the document's original format.
+- Currency value must be an ISO 4217 code (USD, AUD, EUR) only when that code is written on the document, or the symbol is unambiguous (for example € means EUR, £ means GBP).
+- A bare "$" is ambiguous. In that case set value to "$", do not output USD/AUD/CAD. You may set suggested_value to an ISO code only if other paragraphs give evidence (for example an Australian bank or address), with suggested_source_paragraph_ids and suggested_quote. Never treat a suggestion as certain.
 
 OCR paragraphs follow. Each block starts with a stable paragraph ID.
