@@ -177,24 +177,21 @@ def check_duplicate_invoice_numbers(documents: list[ExtractedDocument]) -> list[
     for number, group in grouped.items():
         if len(group) < 2:
             continue
-        for index, invoice in enumerate(group):
-            other = group[0] if index > 0 else group[1]
-            findings.append(
-                FindingDraft(
-                    check_type="duplicate_invoice_number",
-                    severity="high",
-                    explanation=(
-                        f"Invoice number {number} appears on more than one document "
-                        f"({invoice.filename} and {other.filename})."
-                    ),
-                    document_id=invoice.document_id,
-                    related_document_id=other.document_id,
-                    field_citations=[
-                        citation_for(invoice, "invoice_number"),
-                        citation_for(other, "invoice_number"),
-                    ],
-                )
+        names = ", ".join(invoice.filename for invoice in group)
+        citations = [citation_for(invoice, "invoice_number") for invoice in group]
+        findings.append(
+            FindingDraft(
+                check_type="duplicate_invoice_number",
+                severity="high",
+                explanation=(
+                    f"Invoice number {number} appears on more than one document "
+                    f"({names})."
+                ),
+                document_id=group[0].document_id,
+                related_document_id=group[1].document_id,
+                field_citations=citations,
             )
+        )
     return findings
 
 
@@ -219,21 +216,19 @@ def check_duplicate_po_numbers(documents: list[ExtractedDocument]) -> list[Findi
             continue
         citations = [citation_for(purchase_order, "po_number") for purchase_order in group]
         names = ", ".join(purchase_order.filename for purchase_order in group)
-        for index, purchase_order in enumerate(group):
-            other = group[0] if index > 0 else group[1]
-            findings.append(
-                FindingDraft(
-                    check_type="duplicate_po_number",
-                    severity="high",
-                    explanation=(
-                        f"Purchase order number {number} appears on more than one document "
-                        f"({names}). Comparison checks still run against each PO."
-                    ),
-                    document_id=purchase_order.document_id,
-                    related_document_id=other.document_id,
-                    field_citations=citations,
-                )
+        findings.append(
+            FindingDraft(
+                check_type="duplicate_po_number",
+                severity="high",
+                explanation=(
+                    f"Purchase order number {number} appears on more than one document "
+                    f"({names}). Comparison checks still run against each PO."
+                ),
+                document_id=group[0].document_id,
+                related_document_id=group[1].document_id,
+                field_citations=citations,
             )
+        )
     return findings
 
 

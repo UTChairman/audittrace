@@ -219,9 +219,14 @@ def test_duplicate_invoice_numbers() -> None:
         },
     )
     findings = check_duplicate_invoice_numbers([first, second])
-    assert len(findings) == 2
-    assert all(finding.check_type == "duplicate_invoice_number" for finding in findings)
-    assert all(finding.severity == "high" for finding in findings)
+    assert len(findings) == 1
+    finding = findings[0]
+    assert finding.check_type == "duplicate_invoice_number"
+    assert finding.severity == "high"
+    assert finding.document_id == 1
+    assert finding.related_document_id == 3
+    cited_ids = {citation["document_id"] for citation in finding.field_citations}
+    assert cited_ids == {1, 3}
 
 
 def test_run_audit_checks_links_by_po_number() -> None:
@@ -266,19 +271,12 @@ def test_duplicate_po_number_cites_every_po_and_still_compares() -> None:
         settings=SETTINGS,
     )
     duplicates = [item for item in findings if item.check_type == "duplicate_po_number"]
-    assert len(duplicates) == 2
-    assert all(item.severity == "high" for item in duplicates)
-    cited_ids = {
-        citation["document_id"]
-        for item in duplicates
-        for citation in item.field_citations
-    }
+    assert len(duplicates) == 1
+    duplicate = duplicates[0]
+    assert duplicate.severity == "high"
+    cited_ids = {citation["document_id"] for citation in duplicate.field_citations}
     assert cited_ids == {2, 4}
-    assert all(
-        citation["field_name"] == "po_number"
-        for item in duplicates
-        for citation in item.field_citations
-    )
+    assert all(citation["field_name"] == "po_number" for citation in duplicate.field_citations)
     vendor_findings = [item for item in findings if item.check_type == "vendor_mismatch"]
     assert any(item.related_document_id == 4 for item in vendor_findings)
     assert check_duplicate_po_numbers([_invoice(), matching_po]) == []

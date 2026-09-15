@@ -144,12 +144,17 @@ def _to_out(row: AuditFinding) -> AuditFindingOut:
 
 def list_findings(db: Session, document_id: int | None = None) -> AuditFindingListOut:
     query = db.query(AuditFinding)
-    if document_id is not None:
-        query = query.filter(
-            (AuditFinding.document_id == document_id)
-            | (AuditFinding.related_document_id == document_id)
-        )
     rows = query.all()
+    if document_id is not None:
+        matched: list[AuditFinding] = []
+        for row in rows:
+            if row.document_id == document_id or row.related_document_id == document_id:
+                matched.append(row)
+                continue
+            citations = json.loads(row.field_citations or "[]")
+            if any(item.get("document_id") == document_id for item in citations):
+                matched.append(row)
+        rows = matched
     severity_order = {"high": 0, "medium": 1, "low": 2}
     rows.sort(key=lambda row: (severity_order.get(row.severity, 9), row.id))
     return AuditFindingListOut(findings=[_to_out(row) for row in rows])
