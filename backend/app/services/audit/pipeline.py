@@ -79,7 +79,9 @@ def load_extracted_documents(db: Session) -> list[ExtractedDocument]:
 
 
 def persist_findings(db: Session, drafts: list[FindingDraft]) -> int:
-    db.query(AuditFinding).delete()
+    deleted = db.query(AuditFinding).delete(synchronize_session="fetch")
+    db.flush()
+    logger.info("Cleared %s previous audit finding(s) before recompute", deleted)
     now = datetime.now(timezone.utc)
     for draft in drafts:
         db.add(
