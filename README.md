@@ -63,7 +63,13 @@ New uploads run OCR then extraction automatically. Existing OCR-complete documen
 curl -X POST "http://localhost:8000/api/extract/pending"
 ```
 
-That extracts one document at a time, with a delay between documents (`EXTRACT_PENDING_DELAY_SECONDS`, default 15) so free-tier Gemini rate limits are respected.
+Requeue documents that previously failed extraction:
+
+```bash
+curl -X POST "http://localhost:8000/api/extract/pending?include_failed=true"
+```
+
+That extracts one document at a time, with a delay between documents (`EXTRACT_PENDING_DELAY_SECONDS`, default 15) so free-tier Gemini rate limits are respected. Transient Gemini 503/500/timeout errors are retried with backoff; if `GEMINI_MODEL` stays unavailable, `GEMINI_FALLBACK_MODEL` is tried once.
 
 ## Phase 3: Audit checks
 

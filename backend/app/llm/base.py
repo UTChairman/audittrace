@@ -28,8 +28,16 @@ class LLMRateLimitError(LLMError):
     """Raised when the provider returns a transient rate limit."""
 
 
+class LLMUnavailableError(LLMError):
+    """Raised on 503/500 responses or network timeouts that should be retried."""
+
+
 class LLMBillingError(LLMError):
     """Raised when the provider rejects the request for billing or credit reasons."""
+
+
+class LLMPermissionError(LLMError):
+    """Raised on 401/403 or API-key permission failures that should fail fast."""
 
 
 class LLMInvalidOutputError(LLMError):

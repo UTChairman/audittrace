@@ -50,9 +50,10 @@ def read_extraction(document_id: int, db: Session = Depends(get_db)) -> Extracti
 async def extract_pending_documents(
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
+    include_failed: bool = False,
 ) -> PendingExtractOut:
     settings = get_settings()
-    document_ids = list_ocr_complete_document_ids(db)
+    document_ids = list_ocr_complete_document_ids(db, include_failed=include_failed)
     if document_ids:
         db.query(Document).filter(Document.id.in_(document_ids)).update(
             {Document.status: "extracting"},

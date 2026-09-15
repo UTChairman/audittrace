@@ -13,7 +13,7 @@ from app.db.models import (
     SessionLocal,
 )
 from app.llm.base import LLMError, LLMProvider
-from app.llm.gemini import get_llm_provider
+from app.llm.gemini import get_llm_provider, public_error_message
 from app.schemas.extraction import (
     ExtractedFieldOut,
     ExtractionOut,
@@ -208,16 +208,18 @@ async def process_document_extraction(
         run_audit(db)
     except LLMError as exc:
         db.rollback()
+        message = public_error_message(exc)
         document = db.get(Document, document_id)
         if document is not None:
-            _mark_status(db, document, "extraction_failed", str(exc))
-        logger.error("Extraction failed for document %s: %s", document_id, exc)
-    except Exception:
+            _mark_status(db, document, "extraction_failed", message)
+        logger.error("Extraction failed for document %s: %s", document_id, message)
+    except Exception as exc:
         db.rollback()
+        message = public_error_message(exc)
         document = db.get(Document, document_id)
         if document is not None:
-            _mark_status(db, document, "extraction_failed", "Unexpected error during extraction")
-        logger.exception("Unexpected extraction failure for document %s", document_id)
+            _mark_status(db, document, "extraction_failed", message)
+        logger.exception("Extraction failure for document %s: %s", document_id, message)
     finally:
         db.close()
 
@@ -275,10 +277,15 @@ def get_latest_extraction(db: Session, document_id: int) -> ExtractionOut:
     )
 
 
-def list_ocr_complete_document_ids(db: Session) -> list[int]:
+def list_ocr_complete_document_ids(
+    db: Session, *, include_failed: bool = False
+) -> list[int]:
+    statuses = ["ocr_complete"]
+    if include_failed:
+        statuses.append("extraction_failed")
     rows = (
         db.query(Document.id)
-        .filter(Document.status == "ocr_complete")
+        .filter(Document.status.in_(statuses))
         .order_by(Document.id.asc())
         .all()
     )
