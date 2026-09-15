@@ -29,11 +29,35 @@ Fetch OCR paragraphs with stable IDs:
 curl "http://localhost:8000/api/documents/1/ocr"
 ```
 
-Reparse cached OCR from stored Vision responses (no API calls):
+Reparse cached OCR from stored Vision responses (no API calls). Run this from the `backend/` folder so Python can import the `scripts` package:
 
 ```bash
-python scripts/reparse_ocr_caches.py
+python -m scripts.reparse_ocr_caches
 ```
+
+## Phase 2: Extraction with citations
+
+After OCR completes, the API classifies the document with Gemini and extracts Invoice or Purchase Order fields. Every field includes `source_paragraph_ids`, a supporting quote, a verification badge (`verified` / `weak` / `unverified`), validation flags, and a confidence score.
+
+Trigger extraction on a document that already has OCR (this queues Gemini in the background; do not start a second server):
+
+```bash
+curl -X POST "http://localhost:8000/api/documents/1/extract"
+```
+
+Poll until `status` is `extracted` or `extraction_failed`:
+
+```bash
+curl "http://localhost:8000/api/documents/1"
+```
+
+Read extracted fields, citations, and verification:
+
+```bash
+curl "http://localhost:8000/api/documents/1/extraction"
+```
+
+New uploads run OCR then extraction automatically. Existing OCR-complete documents need the extract POST above.
 
 ### Tests
 
