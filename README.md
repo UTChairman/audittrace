@@ -29,6 +29,12 @@ Fetch OCR paragraphs with stable IDs:
 curl "http://localhost:8000/api/documents/1/ocr"
 ```
 
+Reparse cached OCR from stored Vision responses (no API calls):
+
+```bash
+python scripts/reparse_ocr_caches.py
+```
+
 ### Tests
 
 From `backend/`:

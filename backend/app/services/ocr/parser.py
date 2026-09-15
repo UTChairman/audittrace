@@ -1,6 +1,9 @@
 from dataclasses import dataclass, field
 from statistics import mean
 
+SPACE_BREAKS = frozenset({"SPACE", "SURE_SPACE"})
+LINE_BREAKS = frozenset({"EOL_SURE_SPACE", "LINE_BREAK"})
+
 
 @dataclass
 class ParsedWord:
@@ -72,9 +75,75 @@ def _average_confidence(values: list[float | None]) -> float | None:
     return float(mean(present))
 
 
+def _get_break_type(symbol: dict) -> str | None:
+    detected_break = (symbol.get("property") or {}).get("detectedBreak") or {}
+    break_type = detected_break.get("type")
+    if break_type in (None, "UNKNOWN"):
+        return None
+    return str(break_type)
+
+
+def _break_suffix(break_type: str | None) -> str:
+    if break_type in SPACE_BREAKS:
+        return " "
+    if break_type in LINE_BREAKS:
+        return "\n"
+    if break_type == "HYPHEN":
+        return "-"
+    return ""
+
+
+def _symbols_to_word_text(symbols: list[dict]) -> str:
+    """Build word text from symbols, applying within-word detected breaks."""
+    if not symbols:
+        return ""
+
+    parts: list[str] = []
+    for index, symbol in enumerate(symbols):
+        parts.append(symbol.get("text", ""))
+        if index < len(symbols) - 1:
+            parts.append(_break_suffix(_get_break_type(symbol)))
+    return "".join(parts)
+
+
+def _join_with_trailing_breaks(segments: list[str], break_types: list[str | None]) -> str:
+    """Join text segments using the break after each segment's last symbol."""
+    if not segments:
+        return ""
+
+    parts: list[str] = [segments[0]]
+    for index in range(1, len(segments)):
+        parts.append(_break_suffix(break_types[index - 1]))
+        parts.append(segments[index])
+    return "".join(parts).strip()
+
+
+def _word_trailing_break(word: dict) -> str | None:
+    symbols = word.get("symbols") or []
+    if not symbols:
+        return None
+    return _get_break_type(symbols[-1])
+
+
+def _paragraph_text_from_words(words: list[dict]) -> str:
+    word_texts = [_symbols_to_word_text(word.get("symbols") or []) for word in words]
+    trailing_breaks = [_word_trailing_break(word) for word in words]
+    return _join_with_trailing_breaks(word_texts, trailing_breaks)
+
+
+def _block_text_from_paragraphs(
+    vision_paragraphs: list[dict], paragraph_texts: list[str]
+) -> str:
+    trailing_breaks: list[str | None] = []
+    for paragraph in vision_paragraphs:
+        words = paragraph.get("words") or []
+        trailing_breaks.append(_word_trailing_break(words[-1]) if words else None)
+    return _join_with_trailing_breaks(paragraph_texts, trailing_breaks)
+
+
 def _word_text_and_confidence(word: dict) -> tuple[str, float | None]:
     symbols = word.get("symbols") or []
-    text = "".join(symbol.get("text", "") for symbol in symbols)
+    text = _symbols_to_word_text(symbols)
     confidences = [symbol.get("confidence") for symbol in symbols if "confidence" in symbol]
     confidence = float(mean(confidences)) if confidences else word.get("confidence")
     if confidence is not None:
@@ -128,20 +197,22 @@ def parse_vision_page_response(
         )
 
         block_paragraphs: list[ParsedParagraph] = []
-        for paragraph_index, paragraph in enumerate(block.get("paragraphs") or []):
+        vision_paragraphs = block.get("paragraphs") or []
+        paragraph_texts: list[str] = []
+
+        for paragraph_index, paragraph in enumerate(vision_paragraphs):
             page_paragraph_counter += 1
             paragraph_vertices = (paragraph.get("boundingBox") or {}).get("vertices") or []
             para_bbox = _vertices_to_bbox(paragraph_vertices, page_width, page_height)
+            vision_words = paragraph.get("words") or []
 
             parsed_words: list[ParsedWord] = []
-            word_texts: list[str] = []
             word_confidences: list[float | None] = []
 
-            for word_index, word in enumerate(paragraph.get("words") or []):
+            for word_index, word in enumerate(vision_words):
                 word_vertices = (word.get("boundingBox") or {}).get("vertices") or []
                 word_bbox = _vertices_to_bbox(word_vertices, page_width, page_height)
                 word_text, word_confidence = _word_text_and_confidence(word)
-                word_texts.append(word_text)
                 word_confidences.append(word_confidence)
                 parsed_words.append(
                     ParsedWord(
@@ -155,7 +226,8 @@ def parse_vision_page_response(
                     )
                 )
 
-            paragraph_text = "".join(word_texts).strip()
+            paragraph_text = _paragraph_text_from_words(vision_words)
+            paragraph_texts.append(paragraph_text)
             parsed_paragraph = ParsedParagraph(
                 block_index=block_index,
                 paragraph_index=paragraph_index,
@@ -171,9 +243,9 @@ def parse_vision_page_response(
             block_paragraphs.append(parsed_paragraph)
             parsed.paragraphs.append(parsed_paragraph)
 
-        parsed_block.text = "\n".join(p.text for p in block_paragraphs if p.text)
+        parsed_block.text = _block_text_from_paragraphs(vision_paragraphs, paragraph_texts)
         parsed_block.confidence = _average_confidence(
-            [p.confidence for p in block_paragraphs]
+            [paragraph.confidence for paragraph in block_paragraphs]
         )
         parsed_block.paragraphs = block_paragraphs
         parsed.blocks.append(parsed_block)

@@ -8,15 +8,12 @@ from sqlalchemy.orm import Session
 from app.db.models import (
     Document,
     DocumentPage,
-    OcrBlock,
     OcrCache,
-    OcrPageResult,
-    OcrParagraph,
-    OcrWord,
     SessionLocal,
 )
-from app.services.ocr.parser import ParsedPage, parse_vision_page_response
-from app.services.ocr.vision import VisionOcrError, annotate_image, serialize_vision_response
+from app.services.ocr.parser import parse_vision_page_response
+from app.services.ocr.repository import save_parsed_page
+from app.services.ocr.vision import VisionOcrError, annotate_image
 from app.services.pdf import PdfProcessingError, render_image_page, render_pdf_to_pages
 
 logger = logging.getLogger(__name__)
@@ -24,62 +21,6 @@ logger = logging.getLogger(__name__)
 
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
-
-
-def _save_parsed_page(db: Session, ocr_cache_id: int, parsed: ParsedPage, raw_response: dict) -> None:
-    db.add(
-        OcrPageResult(
-            ocr_cache_id=ocr_cache_id,
-            page_number=parsed.page_number,
-            raw_vision_response=serialize_vision_response(raw_response),
-        )
-    )
-
-    for block in parsed.blocks:
-        db.add(
-            OcrBlock(
-                ocr_cache_id=ocr_cache_id,
-                page_number=parsed.page_number,
-                block_index=block.block_index,
-                text=block.text,
-                bbox_x=block.bbox_x,
-                bbox_y=block.bbox_y,
-                bbox_width=block.bbox_width,
-                bbox_height=block.bbox_height,
-                confidence=block.confidence,
-            )
-        )
-
-    for paragraph in parsed.paragraphs:
-        paragraph_row = OcrParagraph(
-            ocr_cache_id=ocr_cache_id,
-            page_number=parsed.page_number,
-            block_index=paragraph.block_index,
-            paragraph_index=paragraph.paragraph_index,
-            page_paragraph_index=paragraph.page_paragraph_index,
-            text=paragraph.text,
-            bbox_x=paragraph.bbox_x,
-            bbox_y=paragraph.bbox_y,
-            bbox_width=paragraph.bbox_width,
-            bbox_height=paragraph.bbox_height,
-            confidence=paragraph.confidence,
-        )
-        db.add(paragraph_row)
-        db.flush()
-
-        for word in paragraph.words:
-            db.add(
-                OcrWord(
-                    paragraph_id=paragraph_row.id,
-                    word_index=word.word_index,
-                    text=word.text,
-                    bbox_x=word.bbox_x,
-                    bbox_y=word.bbox_y,
-                    bbox_width=word.bbox_width,
-                    bbox_height=word.bbox_height,
-                    confidence=word.confidence,
-                )
-            )
 
 
 def _persist_document_pages(db: Session, document_id: int, rendered_pages) -> None:
@@ -244,7 +185,7 @@ async def process_document_ocr(document_id: int) -> None:
             parsed = parse_vision_page_response(vision_response, rendered.page_number)
             parsed.width_px = rendered.width_px
             parsed.height_px = rendered.height_px
-            _save_parsed_page(db, ocr_cache.id, parsed, vision_response)
+            save_parsed_page(db, ocr_cache.id, parsed, vision_response)
 
         document.status = "ocr_complete"
         document.updated_at = _utcnow()

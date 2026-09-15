@@ -20,7 +20,7 @@ from app.schemas.ocr import (
     UploadResponse,
 )
 from app.services.ingestion import process_document_ocr
-from app.utils.files import ALLOWED_CONTENT_TYPES, detect_image_suffix, sanitize_filename
+from app.utils.files import ALLOWED_CONTENT_TYPES, detect_image_suffix, sanitize_filename, to_data_relative_path
 from app.utils.hashing import build_stable_id, sha256_hex
 
 logger = logging.getLogger(__name__)
@@ -144,7 +144,7 @@ def get_document(db: Session, document_id: int) -> DocumentOut:
         pages=[
             DocumentPageOut(
                 page_number=page.page_number,
-                image_path=page.image_path,
+                image_path=to_data_relative_path(page.image_path),
                 width_px=page.width_px,
                 height_px=page.height_px,
             )
