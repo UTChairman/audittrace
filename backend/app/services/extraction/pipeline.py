@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 from datetime import datetime, timezone
@@ -272,3 +273,32 @@ def get_latest_extraction(db: Session, document_id: int) -> ExtractionOut:
         output_tokens=extraction.output_tokens if extraction else None,
         fields=fields_out,
     )
+
+
+def list_ocr_complete_document_ids(db: Session) -> list[int]:
+    rows = (
+        db.query(Document.id)
+        .filter(Document.status == "ocr_complete")
+        .order_by(Document.id.asc())
+        .all()
+    )
+    return [row[0] for row in rows]
+
+
+async def process_pending_extractions(
+    document_ids: list[int],
+    delay_seconds: float,
+) -> None:
+    """Extract documents one at a time so free-tier Gemini rate limits are respected."""
+    for index, document_id in enumerate(document_ids):
+        if index > 0 and delay_seconds > 0:
+            logger.info(
+                "Waiting %.1fs before extracting document %s (%s/%s)",
+                delay_seconds,
+                document_id,
+                index + 1,
+                len(document_ids),
+            )
+            await asyncio.sleep(delay_seconds)
+        await process_document_extraction(document_id)
+

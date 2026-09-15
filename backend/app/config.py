@@ -26,6 +26,7 @@ class Settings:
     line_item_match_threshold: int
     total_mismatch_high_percent: float
     invoice_before_po_low_days: int
+    extract_pending_delay_seconds: float
     database_url: str
 
     @property
@@ -48,6 +49,9 @@ def get_settings() -> Settings:
         line_item_match_threshold=int(os.getenv("LINE_ITEM_MATCH_THRESHOLD", "80")),
         total_mismatch_high_percent=float(os.getenv("TOTAL_MISMATCH_HIGH_PERCENT", "5")),
         invoice_before_po_low_days=int(os.getenv("INVOICE_BEFORE_PO_LOW_DAYS", "7")),
+        extract_pending_delay_seconds=float(
+            os.getenv("EXTRACT_PENDING_DELAY_SECONDS", "15")
+        ),
         database_url=os.getenv("DATABASE_URL", f"sqlite:///{db_path.as_posix()}"),
     )
 

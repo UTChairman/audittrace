@@ -86,3 +86,10 @@ class ExtractionOut(BaseModel):
 class ExtractJobOut(BaseModel):
     document_id: int
     status: str
+
+
+class PendingExtractOut(BaseModel):
+    queued: int
+    document_ids: list[int]
+    delay_seconds: float
+

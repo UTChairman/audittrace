@@ -57,7 +57,13 @@ Read extracted fields, citations, and verification:
 curl "http://localhost:8000/api/documents/1/extraction"
 ```
 
-New uploads run OCR then extraction automatically. Existing OCR-complete documents need the extract POST above.
+New uploads run OCR then extraction automatically. Existing OCR-complete documents need the extract POST above, or queue all of them at once:
+
+```bash
+curl -X POST "http://localhost:8000/api/extract/pending"
+```
+
+That extracts one document at a time, with a delay between documents (`EXTRACT_PENDING_DELAY_SECONDS`, default 15) so free-tier Gemini rate limits are respected.
 
 ## Phase 3: Audit checks
 
