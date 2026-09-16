@@ -4,6 +4,7 @@ import { getDocument, getExtraction, getFinding, getOcr } from "../api/client";
 import type { AuditFinding, DocumentOcr, DocumentSummary, Extraction, OcrParagraph } from "../types/api";
 import { PageViewer } from "../components/PageViewer";
 import { StatusBadge } from "../components/StatusBadge";
+import { checkTypeLabel, fieldLabel, formatFieldValue } from "../labels";
 
 type Pane = {
   document: DocumentSummary;
@@ -43,6 +44,14 @@ function EvidencePane({
   const citedFields = (pane.extraction?.fields ?? []).filter((field) =>
     field.source_paragraph_ids.some((id) => highlightedIds.includes(id))
   );
+  const currencyField = pane.extraction?.fields.find((field) => field.field_name === "currency");
+  const suggested = pane.extraction?.fields.find((field) => field.field_name === "currency_suggested");
+  const currency =
+    typeof currencyField?.value === "string"
+      ? currencyField.value
+      : typeof suggested?.value === "string"
+        ? suggested.value
+        : null;
   return (
     <section className="space-y-3">
       <div className="flex items-center justify-between">
@@ -58,6 +67,7 @@ function EvidencePane({
           pageNumber={pageNumber}
           paragraphs={paragraphs}
           highlightedIds={highlightedIds}
+          intensity="cited"
         />
       ) : (
         <p className="text-ink/60">No page image.</p>
@@ -65,8 +75,8 @@ function EvidencePane({
       <div className="space-y-2">
         {citedFields.map((field) => (
           <div key={field.field_name} className="rounded-md border border-forest/30 bg-forest/5 px-3 py-2">
-            <p className="text-xs uppercase tracking-wide text-ink/50">{field.field_name}</p>
-            <p className="font-medium">{String(field.value ?? "—")}</p>
+            <p className="text-xs tracking-wide text-ink/50">{fieldLabel(field.field_name)}</p>
+            <p className="font-medium">{formatFieldValue(field.field_name, field.value, currency)}</p>
             {field.supporting_quote && <p className="text-sm italic">“{field.supporting_quote}”</p>}
           </div>
         ))}
@@ -122,7 +132,7 @@ export function FindingEvidencePage() {
       </Link>
       <div>
         <p className="text-xs font-semibold uppercase tracking-wide text-ink/50">{finding.severity}</p>
-        <h1 className="font-display text-3xl tracking-tight">{finding.check_type.replaceAll("_", " ")}</h1>
+        <h1 className="font-display text-3xl tracking-tight">{checkTypeLabel(finding.check_type)}</h1>
         <p className="mt-1 text-ink/75">{finding.explanation}</p>
       </div>
       <div className={twoDocs ? "grid gap-5 lg:grid-cols-2" : "grid gap-5"}>

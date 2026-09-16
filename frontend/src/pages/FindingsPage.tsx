@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { listFindings, runAudit } from "../api/client";
 import type { AuditFinding } from "../types/api";
+import { checkTypeLabel } from "../labels";
 
 const SEVERITY: Record<string, string> = {
   high: "text-high",
@@ -45,7 +46,7 @@ export function FindingsPage() {
             className="block rounded-lg border border-line bg-elevated px-4 py-3 shadow-panel hover:opacity-95 active:opacity-80"
           >
             <div className="flex items-center justify-between gap-3">
-              <p className="font-medium">{finding.check_type.replaceAll("_", " ")}</p>
+              <p className="font-medium">{checkTypeLabel(finding.check_type)}</p>
               <span className={`text-xs font-semibold uppercase ${SEVERITY[finding.severity]}`}>
                 {finding.severity}
               </span>

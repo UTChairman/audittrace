@@ -7,9 +7,18 @@ type Props = {
   pageNumber: number;
   paragraphs: OcrParagraph[];
   highlightedIds: string[];
+  intensity?: "cited" | "selected";
+  sticky?: boolean;
 };
 
-export function PageViewer({ documentId, pageNumber, paragraphs, highlightedIds }: Props) {
+export function PageViewer({
+  documentId,
+  pageNumber,
+  paragraphs,
+  highlightedIds,
+  intensity = "cited",
+  sticky = false,
+}: Props) {
   const boxRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const [imageReady, setImageReady] = useState(false);
 
@@ -26,9 +35,14 @@ export function PageViewer({ documentId, pageNumber, paragraphs, highlightedIds 
 
   const highlighted = new Set(highlightedIds);
   const pageParagraphs = paragraphs.filter((paragraph) => paragraph.page_number === pageNumber);
+  const fill = intensity === "selected" ? "rgba(232, 196, 74, 0.40)" : "rgba(232, 196, 74, 0.25)";
 
   return (
-    <div className="overflow-auto rounded-lg border border-line bg-[#ece6d8] p-3 shadow-panel">
+    <div
+      className={`overflow-auto rounded-lg border border-line bg-[#ece6d8] p-3 shadow-panel ${
+        sticky ? "lg:sticky lg:top-4 lg:max-h-[calc(100vh-5.5rem)]" : ""
+      }`}
+    >
       <div className="relative block w-full">
         <img
           key={`${documentId}-${pageNumber}`}
@@ -46,16 +60,15 @@ export function PageViewer({ documentId, pageNumber, paragraphs, highlightedIds 
                 ref={(node) => {
                   boxRefs.current[paragraph.stable_id] = node;
                 }}
-                className={
-                  active
-                    ? "absolute border-2 border-forest bg-forest/15"
-                    : "absolute border border-transparent"
-                }
+                className="absolute"
                 style={{
                   left: `${paragraph.bbox.x * 100}%`,
                   top: `${paragraph.bbox.y * 100}%`,
                   width: `${paragraph.bbox.width * 100}%`,
                   height: `${paragraph.bbox.height * 100}%`,
+                  backgroundColor: active ? fill : "transparent",
+                  border: active ? "2px solid #3d5a45" : "2px solid transparent",
+                  boxSizing: "border-box",
                 }}
               />
             );

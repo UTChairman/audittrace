@@ -1,6 +1,13 @@
 import type { ExtractedField } from "../types/api";
 
 export function VerificationBadge({ field }: { field: ExtractedField }) {
+  if (field.verification_status === "not_present") {
+    return (
+      <span className="rounded-full bg-ink/10 px-2 py-0.5 text-[11px] font-semibold tracking-wide text-ink/55">
+        Not present
+      </span>
+    );
+  }
   const isAmbiguous = field.validation_flags.some((flag) =>
     flag.reason.startsWith("ambiguous_currency_symbol")
   );

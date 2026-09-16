@@ -37,7 +37,7 @@ export type ExtractedField = {
   value: unknown;
   source_paragraph_ids: string[];
   supporting_quote: string | null;
-  verification_status: "verified" | "weak" | "unverified";
+  verification_status: "verified" | "weak" | "unverified" | "not_present";
   validation_flags: ValidationFlag[];
   confidence_score: number;
   review_status: string;
@@ -99,6 +99,7 @@ export type AuditFinding = {
 export type ReviewAction = {
   id: number;
   document_id: number;
+  filename: string | null;
   field_id: number | null;
   field_name: string | null;
   action: string;
