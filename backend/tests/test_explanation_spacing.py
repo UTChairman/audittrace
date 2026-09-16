@@ -84,7 +84,6 @@ def _purchase_order(
             "po_number": _field("po_number", "12345", paragraph=f"doc{document_id}_p1_para2"),
             "order_date": _field("order_date", order_date, paragraph=f"doc{document_id}_p1_para3"),
             "total": _field("total", total, paragraph=f"doc{document_id}_p1_para4"),
-            "currency": _field("currency", "$", paragraph=f"doc{document_id}_p1_para9"),
             "line_items[0].description": _field(
                 "line_items[0].description", description, paragraph=f"doc{document_id}_p1_para5"
             ),

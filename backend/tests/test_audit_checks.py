@@ -111,6 +111,18 @@ def test_total_mismatch_beyond_tolerance() -> None:
     assert finding.severity == "high"
 
 
+def test_total_mismatch_uses_invoice_currency_when_po_has_none() -> None:
+    invoice = _invoice(
+        total=_field("total", 150.0),
+        currency=_field("currency", "$"),
+    )
+    findings = check_invoice_against_po(invoice, _purchase_order(), settings=SETTINGS)
+    finding = next(item for item in findings if item.check_type == "total_mismatch")
+    assert "$150.00" in finding.explanation
+    assert "$108.00" in finding.explanation
+    assert "purchase order total $108.00" in finding.explanation
+
+
 def test_total_mismatch_at_or_below_five_percent_is_medium() -> None:
     findings = check_invoice_against_po(
         _invoice(total=_field("total", 110.0)),

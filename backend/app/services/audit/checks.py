@@ -78,6 +78,15 @@ def document_currency(document: ExtractedDocument) -> str | None:
     return None
 
 
+def pair_currency(*documents: ExtractedDocument) -> str | None:
+    """Prefer a document's own currency, then any linked document's symbol."""
+    for document in documents:
+        token = document_currency(document)
+        if token:
+            return token
+    return None
+
+
 def format_amount(value: float, currency: str | None = None) -> str:
     amount = f"{value:.2f}"
     if not currency:
@@ -411,10 +420,10 @@ def _total_mismatch(
                 "{po_total} by {percent}% of the PO total."
             ).format(
                 invoice_total=format_amount(
-                    invoice_total, document_currency(invoice)
+                    invoice_total, pair_currency(invoice, purchase_order)
                 ),
                 po_total=format_amount(
-                    po_total, document_currency(purchase_order)
+                    po_total, pair_currency(purchase_order, invoice)
                 ),
                 percent=f"{percent:.1f}",
             ),
@@ -538,10 +547,10 @@ def _line_item_differences(
                     ).format(
                         description=_description_text(invoice_item) or f"line {invoice_index}",
                         invoice_price=format_amount(
-                            invoice_price, document_currency(invoice)
+                            invoice_price, pair_currency(invoice, purchase_order)
                         ),
                         po_price=format_amount(
-                            po_price, document_currency(purchase_order)
+                            po_price, pair_currency(purchase_order, invoice)
                         ),
                     ),
                     document_id=invoice.document_id,
