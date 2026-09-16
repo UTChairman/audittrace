@@ -62,10 +62,10 @@ export function PageViewer({
                 }}
                 className="absolute"
                 style={{
-                  left: `${paragraph.bbox.x * 100}%`,
-                  top: `${paragraph.bbox.y * 100}%`,
-                  width: `${paragraph.bbox.width * 100}%`,
-                  height: `${paragraph.bbox.height * 100}%`,
+                  left: `${Math.max(0, paragraph.bbox.x * 100 - 0.9)}%`,
+                  top: `${Math.max(0, paragraph.bbox.y * 100 - 0.7)}%`,
+                  width: `${Math.min(100, paragraph.bbox.width * 100 + 1.8)}%`,
+                  height: `${Math.min(100, paragraph.bbox.height * 100 + 1.4)}%`,
                   backgroundColor: active ? fill : "transparent",
                   border: active ? "2px solid #3d5a45" : "2px solid transparent",
                   boxSizing: "border-box",
