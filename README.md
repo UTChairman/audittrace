@@ -4,11 +4,41 @@ AuditTrace extracts invoice and purchase-order fields from PDFs and images, atta
 
 ## Screenshots
 
-Replace these files with captures from a local run:
+Captured from the Docker reviewer at [http://localhost:8080](http://localhost:8080) using documents already in `data/`. The capture script does not upload files or call Gemini/Vision.
 
-- Document list: `docs/screenshots/documents.png`
-- Field review with citation highlight: `docs/screenshots/review.png`
-- Finding evidence (two documents): `docs/screenshots/findings.png`
+![Findings list](docs/screenshots/findings.png)
+
+Findings list, including vendor mismatch, totals, line items, and duplicates.
+
+![Vendor mismatch evidence](docs/screenshots/evidence_side_by_side.png)
+
+Vendor mismatch: both source pages with the cited vendors highlighted.
+
+![Document review](docs/screenshots/document_review.png)
+
+Document review: `invoice.pdf` with Vendor name selected and the cited paragraph highlighted.
+
+![Currency flag](docs/screenshots/currency_flag.png)
+
+Currency field: weak citation, ambiguous `$`, suggested AUD from Melbourne, VIC 3000.
+
+![Duplicate banner](docs/screenshots/duplicate_banner.png)
+
+Exact-copy banner on the second upload of `invoice.pdf`.
+
+![Audit log](docs/screenshots/audit_log.png)
+
+Audit log of approve, reject, edit, reset, and findings-recalculated rows.
+
+Regenerate from the repository root with the Docker UI running. Playwright is not in `backend/requirements.txt`; install it in the backend venv if needed:
+
+```powershell
+backend\.venv\Scripts\python.exe -m pip install playwright
+backend\.venv\Scripts\python.exe -m playwright install chromium
+backend\.venv\Scripts\python.exe scripts\take_screenshots.py --base-url http://localhost:8080
+```
+
+Writes 1440px-wide PNGs to `docs/screenshots/`.
 
 ## Architecture
 
@@ -66,7 +96,7 @@ npm run dev
 
 Open [http://localhost:5173](http://localhost:5173). Vite proxies `/api` to `http://127.0.0.1:8000`. Upload a PDF on the documents page; OCR then extraction run in the background. Click a field to highlight its source paragraph.
 
-Backend tests (from `backend/`, venv activated):
+Backend tests (from `backend/`, venv activated). **93** tests; Vision and Gemini are mocked, so API keys are not required:
 
 ```powershell
 pytest
