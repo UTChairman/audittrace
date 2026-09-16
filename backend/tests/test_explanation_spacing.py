@@ -46,6 +46,7 @@ def _invoice(document_id: int = 1, filename: str = "invoice.pdf", **overrides: o
         "invoice_date": _field("invoice_date", "January 25, 2016"),
         "po_number": _field("po_number", "12345"),
         "total": _field("total", 93.5),
+        "currency": _field("currency", "$"),
         "line_items[0].description": _field("line_items[0].description", "Web Design"),
         "line_items[0].quantity": _field("line_items[0].quantity", 1),
         "line_items[0].unit_price": _field("line_items[0].unit_price", 85.0),
@@ -83,6 +84,7 @@ def _purchase_order(
             "po_number": _field("po_number", "12345", paragraph=f"doc{document_id}_p1_para2"),
             "order_date": _field("order_date", order_date, paragraph=f"doc{document_id}_p1_para3"),
             "total": _field("total", total, paragraph=f"doc{document_id}_p1_para4"),
+            "currency": _field("currency", "$", paragraph=f"doc{document_id}_p1_para9"),
             "line_items[0].description": _field(
                 "line_items[0].description", description, paragraph=f"doc{document_id}_p1_para5"
             ),
@@ -162,3 +164,9 @@ def test_every_finding_explanation_has_spaces_around_numbers_and_percents() -> N
     total = next(item for item in findings if item.check_type == "total_mismatch")
     assert "% of" in total.explanation
     assert "%of" not in total.explanation
+    assert "$93.50" in total.explanation
+    assert "$82.50" in total.explanation
+    assert "93.5 " not in total.explanation
+    price = next(item for item in findings if item.check_type == "line_item_price_mismatch")
+    assert "$85.00" in price.explanation
+    assert "$75.00" in price.explanation

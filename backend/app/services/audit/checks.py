@@ -70,6 +70,24 @@ def parse_document_date(value: Any | None) -> date | None:
         return None
 
 
+def document_currency(document: ExtractedDocument) -> str | None:
+    for name in ("currency", "currency_suggested"):
+        snapshot = document.fields.get(name)
+        if snapshot is not None and snapshot.value not in (None, ""):
+            return str(snapshot.value).strip()
+    return None
+
+
+def format_amount(value: float, currency: str | None = None) -> str:
+    amount = f"{value:.2f}"
+    if not currency:
+        return amount
+    token = currency.strip()
+    if len(token) == 1:
+        return f"{token}{amount}"
+    return f"{token} {amount}"
+
+
 def citation_for(document: ExtractedDocument, field_name: str) -> dict[str, Any]:
     snapshot = document.fields.get(field_name)
     if snapshot is None:
@@ -392,8 +410,12 @@ def _total_mismatch(
                 "Invoice total {invoice_total} differs from purchase order total "
                 "{po_total} by {percent}% of the PO total."
             ).format(
-                invoice_total=invoice_total,
-                po_total=po_total,
+                invoice_total=format_amount(
+                    invoice_total, document_currency(invoice)
+                ),
+                po_total=format_amount(
+                    po_total, document_currency(purchase_order)
+                ),
                 percent=f"{percent:.1f}",
             ),
             document_id=invoice.document_id,
@@ -515,8 +537,12 @@ def _line_item_differences(
                         "and {po_price} on the purchase order."
                     ).format(
                         description=_description_text(invoice_item) or f"line {invoice_index}",
-                        invoice_price=invoice_price,
-                        po_price=po_price,
+                        invoice_price=format_amount(
+                            invoice_price, document_currency(invoice)
+                        ),
+                        po_price=format_amount(
+                            po_price, document_currency(purchase_order)
+                        ),
                     ),
                     document_id=invoice.document_id,
                     related_document_id=purchase_order.document_id,
