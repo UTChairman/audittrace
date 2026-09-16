@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field
 
 class ReviewFieldIn(BaseModel):
     field_name: str
-    action: Literal["approve", "reject", "edit"]
+    action: Literal["approve", "reject", "edit", "reset"]
     value: Any | None = None
     note: str | None = None
     actor: str = "reviewer"
@@ -14,6 +14,7 @@ class ReviewFieldIn(BaseModel):
 class ReviewActionOut(BaseModel):
     id: int
     document_id: int
+    filename: str | None = None
     field_id: int | None
     field_name: str | None = None
     action: str
