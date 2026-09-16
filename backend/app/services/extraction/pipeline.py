@@ -252,15 +252,17 @@ def get_latest_extraction(db: Session, document_id: int) -> ExtractionOut:
         for row in rows:
             value = json.loads(row.value_json) if row.value_json is not None else None
             flags = [ValidationFlag.model_validate(item) for item in json.loads(row.validation_flags)]
+            status = "not_present" if value is None else row.verification_status
+            confidence = 0.0 if value is None else row.confidence_score
             fields_out.append(
                 ExtractedFieldOut(
                     field_name=row.field_name,
                     value=value,
                     source_paragraph_ids=json.loads(row.source_paragraph_ids),
                     supporting_quote=row.supporting_quote,
-                    verification_status=row.verification_status,
-                    validation_flags=flags,
-                    confidence_score=row.confidence_score,
+                    verification_status=status,
+                    validation_flags=flags if value is not None else [],
+                    confidence_score=confidence,
                     review_status=row.review_status,
                     original_ai_value=(
                         json.loads(row.original_ai_value)

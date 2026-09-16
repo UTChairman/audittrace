@@ -8,7 +8,7 @@ from app.schemas.extraction import CitedNumber, CitedString, LineItemExtraction,
 from app.services.ocr.repository import ParagraphWithId
 from app.utils.hashing import parse_stable_id
 
-VerificationStatus = Literal["verified", "weak", "unverified"]
+VerificationStatus = Literal["verified", "weak", "unverified", "not_present"]
 WEAK_MATCH_THRESHOLD = 50.0
 
 
@@ -70,7 +70,7 @@ def compute_confidence_score(
     has_validation_flags: bool,
 ) -> float:
     """Combine OCR confidence, citation status, and numeric validation."""
-    if value is None:
+    if value is None or verification_status == "not_present":
         return 0.0
     citation_score = {"verified": 1.0, "weak": 0.5, "unverified": 0.0}[verification_status]
     ocr_score = 0.5 if ocr_confidence is None else max(0.0, min(ocr_confidence, 1.0))
@@ -88,6 +88,18 @@ def verify_cited_field(
     document_id: int,
     match_threshold: float,
 ) -> FieldVerification:
+    if value is None:
+        return FieldVerification(
+            field_name=field_name,
+            value=None,
+            source_paragraph_ids=[],
+            supporting_quote=None,
+            verification_status="not_present",
+            validation_flags=[],
+            confidence_score=0.0,
+            ocr_confidence=None,
+        )
+
     flags: list[ValidationFlag] = []
     cited: list[ParagraphWithId] = []
 
@@ -123,19 +135,6 @@ def verify_cited_field(
 
     ocr_confidence = _ocr_confidence(cited)
     quote = supporting_quote.strip() if supporting_quote else None
-
-    if value is None:
-        status: VerificationStatus = "unverified"
-        return FieldVerification(
-            field_name=field_name,
-            value=None,
-            source_paragraph_ids=source_paragraph_ids,
-            supporting_quote=supporting_quote,
-            verification_status=status,
-            validation_flags=flags,
-            confidence_score=0.0,
-            ocr_confidence=ocr_confidence,
-        )
 
     if not quote:
         flags.append(

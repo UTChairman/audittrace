@@ -70,19 +70,56 @@ def test_weak_when_quote_partially_matches() -> None:
     assert any("citation_match_weak" in flag.reason for flag in result.validation_flags)
 
 
-def test_unverified_for_missing_value() -> None:
+def test_not_present_for_missing_value() -> None:
     paragraph = _paragraph("doc1_p1_para1", "Invoice Number INV-1001")
     result = verify_cited_field(
         field_name="po_number",
         value=None,
-        source_paragraph_ids=[],
-        supporting_quote=None,
+        source_paragraph_ids=["doc1_p1_para1"],
+        supporting_quote="ignored",
         paragraphs_by_id={paragraph.stable_id: paragraph},
         document_id=1,
         match_threshold=85,
     )
-    assert result.verification_status == "unverified"
+    assert result.verification_status == "not_present"
+    assert result.value is None
     assert result.confidence_score == 0.0
+    assert result.validation_flags == []
+    assert result.source_paragraph_ids == []
+
+
+def test_null_line_item_detail_is_not_present() -> None:
+    paragraph = _paragraph("doc1_p1_para2", "Web Design 1 x 85.00")
+    items = [
+        LineItemExtraction(
+            description=CitedString(
+                value="Web Design",
+                source_paragraph_ids=["doc1_p1_para2"],
+                supporting_quote="Web Design",
+            ),
+            detail=CitedString(value=None),
+            quantity=CitedNumber(
+                value=1,
+                source_paragraph_ids=["doc1_p1_para2"],
+                supporting_quote="1",
+            ),
+            unit_price=CitedNumber(
+                value=85.0,
+                source_paragraph_ids=["doc1_p1_para2"],
+                supporting_quote="85.00",
+            ),
+            amount=CitedNumber(
+                value=85.0,
+                source_paragraph_ids=["doc1_p1_para2"],
+                supporting_quote="85.00",
+            ),
+        )
+    ]
+    fields = flatten_line_items(items, {paragraph.stable_id: paragraph}, 1, 85, 0.01)
+    detail = next(field for field in fields if field.field_name == "line_items[0].detail")
+    assert detail.value is None
+    assert detail.verification_status == "not_present"
+    assert detail.confidence_score == 0.0
 
 
 def test_invalid_paragraph_id_is_flagged() -> None:

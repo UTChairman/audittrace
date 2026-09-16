@@ -67,7 +67,7 @@ class ExtractedFieldOut(BaseModel):
     value: Any | None
     source_paragraph_ids: list[str]
     supporting_quote: str | None
-    verification_status: Literal["verified", "weak", "unverified"]
+    verification_status: Literal["verified", "weak", "unverified", "not_present"]
     validation_flags: list[ValidationFlag]
     confidence_score: float
     review_status: str
