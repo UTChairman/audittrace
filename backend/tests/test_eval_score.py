@@ -16,7 +16,8 @@ def test_ground_truth_covers_planted_documents() -> None:
         for name in item.documents:
             assert name in truth, name
     assert "inv_clean.pdf" in audit_filenames()
-    assert "inv_clean_rotated.png" not in audit_filenames()
+    assert "inv_clean_rotated.png" in audit_filenames()
+    assert "inv_clean_faded.png" in audit_filenames()
 
 
 def test_values_match_numbers_and_text() -> None:
@@ -71,9 +72,34 @@ def test_render_markdown_includes_model_column() -> None:
 def test_render_markdown_includes_accuracy_table() -> None:
     field_score = {
         "by_type": {"total": {"correct": 8, "total": 10}, "vendor_name": {"correct": 9, "total": 10}},
+        "by_condition": {
+            "clean PDF": {"correct": 16, "total": 18},
+            "faded scan": {"correct": 2, "total": 2},
+            "rotated scan": {"correct": 2, "total": 2},
+        },
         "citation_verified": 40,
         "citation_total": 50,
         "rows": [],
+        "incorrect": [
+            {
+                "filename": "inv_total_high.pdf",
+                "field_name": "line_items[0].description",
+                "expected": "Web Design",
+                "actual": "Web Design Campaign",
+            },
+            {
+                "filename": "inv_total_high.pdf",
+                "field_name": "line_items[0].detail",
+                "expected": "Campaign landing page",
+                "actual": "landing page",
+            },
+        ],
+        "weak_citations": [
+            {"filename": "inv_clean.pdf", "field_name": "currency", "verification_status": "weak"}
+        ],
+        "description_error_docs": ["inv_total_high.pdf"],
+        "detail_error_docs": ["inv_total_high.pdf"],
+        "shared_description_detail_docs": ["inv_total_high.pdf"],
     }
     finding_score = {
         "planted": len(PLANTED_FINDINGS),
@@ -87,17 +113,36 @@ def test_render_markdown_includes_accuracy_table() -> None:
         ],
         "missed": [],
         "false_positives": [],
+        "added_to_ground_truth": [],
         "actual": [],
     }
     markdown = render_markdown(
         field_score,
         finding_score,
-        {"flags": [{"filename": "inv_clean.pdf", "field_name": "currency", "flag_prefix": "ambiguous_currency_symbol", "caught": True}]},
+        {
+            "flags": [
+                {
+                    "filename": "inv_clean.pdf",
+                    "field_name": "currency",
+                    "flag_prefix": "ambiguous_currency_symbol",
+                    "caught": True,
+                }
+            ],
+            "caught": 1,
+            "total": 1,
+        },
     )
     assert "| Field type |" in markdown
     assert "vendor_mismatch" in markdown
-    assert "False positives: **0**" in markdown
+    assert "False positives remaining: **0**" in markdown
     assert "yes" in markdown
+    assert "### Limitations" in markdown
+    assert "### Incorrect fields" in markdown
+    assert "inv_total_high.pdf" in markdown
+    assert "same 1 documents" in markdown
+    assert "### Field accuracy by document condition" in markdown
+    assert "faded scan" in markdown
+    assert "correct, added to ground truth" in markdown or "Expected findings" in markdown
 
 
 def test_finding_identity_separates_total_severities() -> None:

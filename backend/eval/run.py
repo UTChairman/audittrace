@@ -10,7 +10,7 @@ from pathlib import Path
 
 from eval.cases import all_ground_truth
 from eval.generate import generate_all
-from eval.runtime import EVAL_DOCS, EVAL_RESULTS, EVAL_ROOT, bootstrap_eval
+from eval.runtime import EVAL_DOCS, EVAL_RESULTS, EVAL_ROOT, EVAL_DB, bootstrap_eval, repo_relative
 from eval.score import (
     render_markdown,
     score_currency_flags,
@@ -227,7 +227,12 @@ async def run_corpus(*, delay_seconds: float, report_only: bool, model: str) -> 
         }
         (EVAL_ROOT / "results.json").write_text(json.dumps(snapshot, indent=2), encoding="utf-8")
         print(markdown)
-        print(f"Wrote {EVAL_RESULTS}")
+        print(
+            f"Wrote {EVAL_RESULTS} (repository-root {repo_relative(EVAL_RESULTS)})"
+        )
+        print(
+            f"Eval database {EVAL_DB} (repository-root {repo_relative(EVAL_DB)})"
+        )
     finally:
         db.close()
 
@@ -250,7 +255,7 @@ def main() -> None:
     parser.add_argument(
         "--report-only",
         action="store_true",
-        help="Skip OCR/Gemini and score whatever is already in data/eval/eval.db",
+        help="Skip OCR/Gemini and score whatever is already in repository-root data/eval/eval.db",
     )
     parser.add_argument(
         "--generate-only",
@@ -264,7 +269,7 @@ def main() -> None:
         (EVAL_ROOT / "ground_truth.json").write_text(
             json.dumps(all_ground_truth(), indent=2), encoding="utf-8"
         )
-        print(f"Wrote documents to {EVAL_DOCS}")
+        print(f"Wrote documents to {EVAL_DOCS} (repository-root {repo_relative(EVAL_DOCS)})")
         return
     model = (args.model or get_settings().gemini_model).strip()
     asyncio.run(

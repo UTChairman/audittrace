@@ -62,6 +62,8 @@ class PlantedFinding:
     check_type: str
     documents: tuple[str, ...]
     severity: str | None = None
+    added_to_ground_truth: bool = False
+    classification: str | None = None
 
 
 WEB = LineSpec("Web Design", 1, 85.0, 85.0, "Campaign landing page")
@@ -244,6 +246,47 @@ PLANTED_FINDINGS: tuple[PlantedFinding, ...] = (
     PlantedFinding("duplicate_invoice_number", ("inv_dup_a.pdf", "inv_dup_b.pdf"), "high"),
     PlantedFinding("duplicate_po_number", ("po_dup_a.pdf", "po_dup_b.pdf"), "high"),
     PlantedFinding("duplicate_document", ("inv_clean.pdf", "inv_clean_copy.pdf"), "high"),
+    PlantedFinding(
+        "total_mismatch",
+        ("inv_lines.pdf", "po_lines.pdf"),
+        "high",
+        added_to_ground_truth=True,
+        classification=(
+            "Correct side effect of the planted quantity and unit-price change: "
+            "invoice total $110.00 vs PO total $40.00."
+        ),
+    ),
+    PlantedFinding(
+        "line_item_price_mismatch",
+        ("inv_total_high.pdf", "po_total_high.pdf"),
+        "medium",
+        added_to_ground_truth=True,
+        classification=(
+            "Correct side effect of the planted high total mismatch: the PO unit price "
+            "was lowered to $70.00, so the line-item price check also fires."
+        ),
+    ),
+    PlantedFinding(
+        "line_item_price_mismatch",
+        ("inv_total_med.pdf", "po_total_med.pdf"),
+        "medium",
+        added_to_ground_truth=True,
+        classification=(
+            "Correct side effect of the planted medium total mismatch: the PO unit price "
+            "was lowered to $82.00, so the line-item price check also fires."
+        ),
+    ),
+    PlantedFinding(
+        "duplicate_invoice_number",
+        ("inv_clean_faded.png", "inv_clean_rotated.png"),
+        "high",
+        added_to_ground_truth=True,
+        classification=(
+            "Correct behaviour: the faded and rotated scans are copies of inv_clean.pdf "
+            "and share invoice number INV-1001. inv_clean.pdf itself is excluded from this "
+            "check because it is a byte-for-byte duplicate of inv_clean_copy.pdf."
+        ),
+    ),
 )
 
 PLANTED_FLAGS: tuple[dict[str, str], ...] = (
@@ -324,4 +367,5 @@ def audit_filenames() -> set[str]:
     names = {spec.filename for spec in INVOICES}
     names.update(spec.filename for spec in PURCHASE_ORDERS)
     names.update(spec.filename for spec in COPIES)
+    names.update(spec.filename for spec in DEGRADED)
     return names

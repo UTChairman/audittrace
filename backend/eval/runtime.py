@@ -14,8 +14,15 @@ EVAL_DOCS = EVAL_ROOT / "docs"
 EVAL_RESULTS = EVAL_ROOT / "results.md"
 
 
+def repo_relative(path: Path) -> str:
+    try:
+        return path.resolve().relative_to(PROJECT_ROOT.resolve()).as_posix()
+    except ValueError:
+        return str(path)
+
+
 def bootstrap_eval() -> Path:
-    """Use data/eval/ and data/eval/eval.db instead of the interactive database."""
+    """Use repository-root data/eval/ (eval.db, docs, results.md), not backend/data."""
     EVAL_ROOT.mkdir(parents=True, exist_ok=True)
     (EVAL_ROOT / "uploads").mkdir(parents=True, exist_ok=True)
     (EVAL_ROOT / "pages").mkdir(parents=True, exist_ok=True)
