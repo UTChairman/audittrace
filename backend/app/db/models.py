@@ -301,5 +301,19 @@ engine = create_engine(
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 
 
+def configure_engine(database_url: str) -> None:
+    """Point the process at another SQLite file (used by evaluation)."""
+    global engine, SessionLocal
+    engine = create_engine(
+        database_url,
+        connect_args={"check_same_thread": False},
+    )
+    SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+
+def get_session():
+    return SessionLocal()
+
+
 def init_db() -> None:
     Base.metadata.create_all(bind=engine)

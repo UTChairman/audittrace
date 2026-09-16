@@ -9,7 +9,7 @@ from app.db.models import (
     Document,
     DocumentPage,
     OcrCache,
-    SessionLocal,
+    get_session,
 )
 from app.services.ocr.parser import parse_vision_page_response
 from app.services.ocr.repository import save_parsed_page
@@ -65,7 +65,7 @@ def _mark_failed(db: Session, document: Document, message: str) -> None:
 
 async def process_document_ocr(document_id: int) -> None:
     """Background task: render pages if needed, run OCR, persist parsed structure."""
-    db = SessionLocal()
+    db = get_session()
     try:
         document = db.get(Document, document_id)
         if document is None:

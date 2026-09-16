@@ -10,7 +10,7 @@ from app.db.models import (
     DocumentClassification,
     ExtractedField,
     Extraction,
-    SessionLocal,
+    get_session,
 )
 from app.llm.base import LLMError, LLMProvider
 from app.llm.gemini import get_llm_provider, public_error_message
@@ -114,7 +114,7 @@ async def process_document_extraction(
     provider: LLMProvider | None = None,
 ) -> None:
     """Classify a document and extract cited fields after OCR completes."""
-    db = SessionLocal()
+    db = get_session()
     try:
         document = db.get(Document, document_id)
         if document is None:
