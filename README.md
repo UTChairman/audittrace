@@ -122,3 +122,31 @@ From `backend/`:
 ```bash
 pytest
 ```
+
+## Phase 5: Sample data and evaluation
+
+Evaluation uses a **separate** database and file store (`data/eval/eval.db`, `data/eval/uploads`, `data/eval/pages`). It does not touch the documents in the UI.
+
+From `backend/` in PowerShell (venv activated):
+
+```powershell
+python -m eval.run --delay 20
+```
+
+That command writes about 19 synthetic PDFs/PNGs, then OCR-extracts **one document at a time** with a 20 second pause between them. It reuses the existing Gemini retry/backoff. If it fails or you stop it, run the same command again; finished documents are skipped. When everything is already extracted, the same command only re-runs audit scoring and does not call Gemini.
+
+Report only (no Vision/Gemini calls):
+
+```powershell
+python -m eval.run --report-only
+```
+
+PDFs only:
+
+```powershell
+python -m eval.run --generate-only
+```
+
+On the Gemini free tier this usually takes **15–25 minutes** (about 19 files, two Gemini calls each, plus OCR). 503s and rate limits stretch that toward 30–40 minutes.
+
+The markdown table is written to `data/eval/results.md`. Paste that table into this README after a run. `data/eval/` stays gitignored so your interactive test documents are unchanged.
