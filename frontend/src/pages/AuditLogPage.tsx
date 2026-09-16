@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { listReviewActions } from "../api/client";
 import type { ReviewAction } from "../types/api";
-import { actionLabel, fieldLabel, formatFieldValue, isMoneyField, reviewStatusLabel } from "../labels";
+import { actionLabel, fieldLabel, formatFieldValue, isMoneyField } from "../labels";
 
 export function AuditLogPage() {
   const [actions, setActions] = useState<ReviewAction[]>([]);
@@ -46,8 +46,8 @@ export function AuditLogPage() {
                 </td>
                 <td className="px-4 py-3">{fieldLabel(action.field_name)}</td>
                 <td className="px-4 py-3">{actionLabel(action.action)}</td>
-                <td className="px-4 py-3">{formatLogValue(action, action.previous_value)}</td>
-                <td className="px-4 py-3">{formatLogValue(action, action.new_value)}</td>
+                <td className="px-4 py-3">{formatFromTo(action, "from")}</td>
+                <td className="px-4 py-3">{formatFromTo(action, "to")}</td>
               </tr>
             ))}
           </tbody>
@@ -58,13 +58,25 @@ export function AuditLogPage() {
   );
 }
 
+function formatFromTo(action: ReviewAction, side: "from" | "to"): string {
+  const change = statusChange(action);
+  if (change) return side === "from" ? change[0] : change[1];
+  return formatLogValue(action, side === "from" ? action.previous_value : action.new_value);
+}
+
+function statusChange(action: ReviewAction): [string, string] | null {
+  if (action.action === "approve") return ["Pending", "Approved"];
+  if (action.action === "reject") return ["Pending", "Rejected"];
+  if (action.action === "reset") {
+    if (action.previous_value === "approved") return ["Approved", "Pending"];
+    if (action.previous_value === "rejected") return ["Rejected", "Pending"];
+    return ["Edited", "Pending"];
+  }
+  return null;
+}
+
 function formatLogValue(action: ReviewAction, value: unknown): string {
   if (value === null || value === undefined) return "—";
-  if (action.action === "approve" || action.action === "reject" || action.action === "reset") {
-    if (typeof value === "string" && ["pending", "approved", "rejected", "edited"].includes(value)) {
-      return reviewStatusLabel(value);
-    }
-  }
   if (action.field_name && isMoneyField(action.field_name)) {
     return formatFieldValue(action.field_name, value, null);
   }
