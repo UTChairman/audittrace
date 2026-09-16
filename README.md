@@ -1,158 +1,270 @@
 # AuditTrace
 
-AI document extraction with traceable citations back to source document locations.
+AuditTrace extracts invoice and purchase-order fields from PDFs and images, attaches each value to the OCR paragraph it came from, and runs audit checks (vendor, totals, dates, line items, duplicates) that a reviewer can confirm, edit, or reject. It exists because extraction without a source location is hard to audit: the UI highlights the cited region, verification scores the quote against the OCR text, and reviewer edits re-run findings instead of leaving a stale report.
 
-## Phase 1: Ingestion and OCR
+## Screenshots
 
-### Setup
+Replace these files with captures from a local run:
 
-1. Copy `.env.example` to `.env` and add your API keys.
-2. Create and activate a Python virtual environment in `backend/`.
-3. Install dependencies: `pip install -r requirements.txt`
-4. Start the API from `backend/`: `uvicorn app.main:app --reload --port 8000`
+- Document list: `docs/screenshots/documents.png`
+- Field review with citation highlight: `docs/screenshots/review.png`
+- Finding evidence (two documents): `docs/screenshots/findings.png`
 
-### Upload
+## Architecture
 
-```bash
-curl -X POST "http://localhost:8000/api/upload" -F "files=@invoice.pdf"
+```mermaid
+flowchart LR
+  upload[PDF or image] --> api[FastAPI]
+  api --> vision[Cloud Vision OCR]
+  vision --> cache[(SQLite OCR cache by file hash)]
+  cache --> gemini[Gemini provider]
+  gemini --> fields[Cited fields]
+  fields --> audit[Audit checks]
+  fields --> ui[Reviewer UI]
+  audit --> ui
+  ui --> edits[Approve / reject / edit]
+  edits --> audit
 ```
 
-Poll document status:
+The API and SQLite database live in `backend/`. The React reviewer is in `frontend/` and talks to `/api`. Uploaded files, page images, and `audittrace.db` are stored under repository-root `data/` (gitignored). Evaluation uses a second database at repository-root `data/eval/eval.db` and writes `data/eval/results.md`.
 
-```bash
-curl "http://localhost:8000/api/documents/1"
-```
+## API keys
 
-Fetch OCR paragraphs with stable IDs:
+Copy `.env.example` to `.env` in the repository root. Do not commit `.env`.
 
-```bash
-curl "http://localhost:8000/api/documents/1/ocr"
-```
+1. **Gemini** — Google AI Studio, create an API key, set `GEMINI_API_KEY`. Optional: `GEMINI_MODEL` (default `gemini-3.6-flash`) and `GEMINI_FALLBACK_MODEL` (default `gemini-3.5-flash-lite`). The fallback is used by the API after transient retries fail; evaluation pins one model and disables fallback.
+2. **Cloud Vision** — Google Cloud project with the Vision API enabled, create an API key, set `GOOGLE_VISION_API_KEY`. The backend sends it as `X-Goog-Api-Key`, not in the URL.
 
-Reparse cached OCR from stored Vision responses (no API calls). Run this from the `backend/` folder so Python can import the `scripts` package:
+The GitHub Actions workflow does not use these keys. Tests mock Vision and Gemini.
 
-```bash
-python -m scripts.reparse_ocr_caches
-```
+## Local setup
 
-## Phase 2: Extraction with citations
+Requires Python 3.12, Node 22, and the two API keys.
 
-After OCR completes, the API classifies the document with Gemini and extracts Invoice or Purchase Order fields. Every field includes `source_paragraph_ids`, a supporting quote, a verification badge (`verified` / `weak` / `unverified`), validation flags, and a confidence score.
-
-Trigger extraction on a document that already has OCR (this queues Gemini in the background; do not start a second server):
-
-```bash
-curl -X POST "http://localhost:8000/api/documents/1/extract"
-```
-
-Poll until `status` is `extracted` or `extraction_failed`:
-
-```bash
-curl "http://localhost:8000/api/documents/1"
-```
-
-Read extracted fields, citations, and verification:
-
-```bash
-curl "http://localhost:8000/api/documents/1/extraction"
-```
-
-New uploads run OCR then extraction automatically. Existing OCR-complete documents need the extract POST above, or queue all of them at once:
-
-```bash
-curl -X POST "http://localhost:8000/api/extract/pending"
-```
-
-Requeue documents that previously failed extraction:
-
-```bash
-curl -X POST "http://localhost:8000/api/extract/pending?include_failed=true"
-```
-
-That extracts one document at a time, with a delay between documents (`EXTRACT_PENDING_DELAY_SECONDS`, default 15) so free-tier Gemini rate limits are respected. Transient Gemini 503/500/timeout errors are retried with backoff; if `GEMINI_MODEL` stays unavailable, `GEMINI_FALLBACK_MODEL` is tried once.
-
-## Phase 3: Audit checks
-
-After extraction, invoices are linked to purchase orders by PO number. The auditor runs vendor, total, date, line-item, and duplicate invoice-number checks. Each finding includes severity, a plain-English explanation, and citations to the extracted fields on both documents.
-
-Re-run checks across all extracted documents:
-
-```bash
-curl -X POST "http://localhost:8000/api/audit/run"
-```
-
-List all findings:
-
-```bash
-curl "http://localhost:8000/api/findings"
-```
-
-List findings for one document:
-
-```bash
-curl "http://localhost:8000/api/documents/1/findings"
-```
-
-## Phase 4: Reviewer UI
-
-The React app lives in `frontend/`. Keep the existing API on port 8000; do not start a second backend.
-
-From `frontend/` in PowerShell:
+Create a virtual environment in `backend/` and install dependencies:
 
 ```powershell
+cd backend
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+```
+
+Start the API from `backend/` (one process; do not start a second copy):
+
+```powershell
+uvicorn app.main:app --reload --port 8000
+```
+
+Install and run the reviewer from `frontend/`:
+
+```powershell
+cd frontend
 npm install
 npm run dev
 ```
 
-Open [http://localhost:5173](http://localhost:5173). Vite proxies `/api` to `http://127.0.0.1:8000`.
+Open [http://localhost:5173](http://localhost:5173). Vite proxies `/api` to `http://127.0.0.1:8000`. Upload a PDF on the documents page; OCR then extraction run in the background. Click a field to highlight its source paragraph.
 
-Review actions: `POST /api/documents/{id}/review`. Page images: `GET /api/documents/{id}/pages/{n}/image`. Audit log: `GET /api/review-actions`. Export: `/api/export.json` and `/api/export.csv`.
+Backend tests (from `backend/`, venv activated):
 
-### What to click
-
-1. **Live status** — Documents lists each file with Pending / Processing / Extracting / Extracted / Failed. Error text appears in the Error column. Drop a PDF to watch status poll every 2 seconds.
-2. **Click to highlight** — Open `invoice.pdf`. Click `vendor_name` (or Web Design). A box is drawn on the cited paragraph and the page scrolls to it. Resize the window; the box stays aligned.
-3. **Badges** — On the invoice, `currency` should show Weak plus **Ambiguous currency**, with suggested **AUD** and Melbourne evidence.
-4. **Review + audit log** — Approve, Reject, or Edit a field (edit keeps the original AI value). Open **Audit log** and confirm the action.
-5. **Findings evidence** — Open **Findings**, then a two-document finding such as vendor mismatch. Both pages appear side by side with the cited fields highlighted.
-6. **Export** — Use **Export JSON** or **Export CSV** in the header.
-
-From `backend/`:
-
-```bash
+```powershell
 pytest
 ```
 
-## Phase 5: Sample data and evaluation
-
-Evaluation uses a **separate** database and file store (`data/eval/eval.db`, `data/eval/uploads`, `data/eval/pages`). It does not touch the documents in the UI.
-
-From `backend/` in PowerShell (venv activated):
+Frontend typecheck and build (from `frontend/`):
 
 ```powershell
-python -m eval.run --delay 20
+npm run build
 ```
 
-Pin one Gemini model for the whole run (no fallback to Flash Lite). Documents that hit 429 after retries are marked failed and skipped; they are not extracted with a different model. Documents already extracted with another model are reset to `ocr_complete` and re-extracted.
+## Docker setup
+
+On a machine with Docker Compose and a root `.env` file only:
 
 ```powershell
-python -m eval.run --delay 20 --model gemini-3.6-flash
+docker compose up --build
 ```
 
-That command writes about 19 synthetic PDFs/PNGs, then OCR-extracts **one document at a time** with a 20 second pause between them. It retries the pinned model only. If it fails or you stop it, run the same command again; finished documents for that model are skipped. When everything is already extracted with the requested model, the same command only re-runs audit scoring and does not call Gemini. `results.md` records the model used for each document.
+If port 8000 is already used by a local `uvicorn` process, stop that process first (`Ctrl+C` in its terminal). Compose maps:
 
-Report only (no Vision/Gemini calls):
+- Reviewer: [http://localhost:8080](http://localhost:8080) (nginx, `/api` proxied to the backend)
+- API: [http://localhost:8000](http://localhost:8000)
+- Health: [http://localhost:8000/api/health](http://localhost:8000/api/health) should return `{"status":"ok"}`
+
+`./data` is mounted into the backend at `/app/data`, so SQLite, uploads, and page images survive `docker compose down`. Eval files stay in `./data/eval/` on the host.
+
+Useful checks:
 
 ```powershell
-python -m eval.run --report-only
+docker compose ps
+curl http://localhost:8000/api/health
+curl http://localhost:8080
 ```
 
-PDFs only:
+Stop with `docker compose down`. The `data/` folder on the host is not deleted.
+
+## Evaluation
+
+Eval is isolated from the UI database. Both `eval.db` and `results.md` live at **repository-root** `data/eval/` (not under `backend/`), even though you run the command from `backend/`.
+
+From `backend/` with the venv activated:
 
 ```powershell
-python -m eval.run --generate-only
+python -m eval.run --delay 20 --model gemini-3.5-flash-lite
 ```
 
-On the Gemini free tier this usually takes **15–25 minutes** (about 19 files, two Gemini calls each, plus OCR). 503s and rate limits stretch that toward 30–40 minutes.
+`--model` pins that Gemini model for the whole run and disables fallback. Documents that still fail after retries are marked failed and skipped. Documents already extracted with a different model are reset to `ocr_complete` and re-extracted (OCR cache is reused). Re-run the same command to resume.
 
-The markdown table is written to `data/eval/results.md`. Paste that table into this README after a run. `data/eval/` stays gitignored so your interactive test documents are unchanged.
+Rebuild the markdown report from the existing eval database (no Vision or Gemini calls):
+
+```powershell
+python -m eval.run --report-only --model gemini-3.5-flash-lite
+```
+
+The command prints the resolved path and the repository-relative path, for example `repository-root data/eval/results.md` and `repository-root data/eval/eval.db`.
+
+On the Gemini free tier a full run is about 15–40 minutes (19 files, two Gemini calls each, plus OCR, plus `--delay`).
+
+## Evaluation results
+
+Run of 19 synthetic documents on `gemini-3.5-flash-lite` (no fallback). Originally 9 planted findings were listed; 4 additional findings were correct behaviour missing from ground truth and were added. Remaining false positives: 0. False negatives: 0.
+
+Field accuracy: most types 100%. `line_items.description` and `line_items.detail` were 17/19 (89%), both wrong on the same two documents (`inv_total_high.pdf`, `po_dup_b.pdf`). Citation verification: 200/211 (95%); the 11 weak citations are every invoice `currency` field, which is the expected badge for a bare `$`. Scan quality: faded and rotated copies of `inv_clean.pdf` were 13/13; the four field errors were on clean PDFs (185/189). All 11 invoices that use a bare `$` were flagged `ambiguous_currency_symbol`.
+
+Pinned model: **gemini-3.5-flash-lite** (no fallback).
+
+### Models used
+
+| Document | Status | Model |
+| --- | --- | --- |
+| inv_clean.pdf | extracted | gemini-3.5-flash-lite |
+| inv_clean_copy.pdf | extracted | gemini-3.5-flash-lite |
+| inv_clean_faded.png | extracted | gemini-3.5-flash-lite |
+| inv_clean_rotated.png | extracted | gemini-3.5-flash-lite |
+| inv_date.pdf | extracted | gemini-3.5-flash-lite |
+| inv_dup_a.pdf | extracted | gemini-3.5-flash-lite |
+| inv_dup_b.pdf | extracted | gemini-3.5-flash-lite |
+| inv_lines.pdf | extracted | gemini-3.5-flash-lite |
+| inv_total_high.pdf | extracted | gemini-3.5-flash-lite |
+| inv_total_med.pdf | extracted | gemini-3.5-flash-lite |
+| inv_vendor.pdf | extracted | gemini-3.5-flash-lite |
+| po_clean.pdf | extracted | gemini-3.5-flash-lite |
+| po_date.pdf | extracted | gemini-3.5-flash-lite |
+| po_dup_a.pdf | extracted | gemini-3.5-flash-lite |
+| po_dup_b.pdf | extracted | gemini-3.5-flash-lite |
+| po_lines.pdf | extracted | gemini-3.5-flash-lite |
+| po_total_high.pdf | extracted | gemini-3.5-flash-lite |
+| po_total_med.pdf | extracted | gemini-3.5-flash-lite |
+| po_vendor.pdf | extracted | gemini-3.5-flash-lite |
+
+### Field accuracy
+
+| Field type | Correct | Total | Accuracy |
+| --- | ---: | ---: | ---: |
+| currency | 11 | 11 | 100% |
+| invoice_date | 11 | 11 | 100% |
+| invoice_number | 11 | 11 | 100% |
+| line_items.amount | 19 | 19 | 100% |
+| line_items.description | 17 | 19 | 89% |
+| line_items.detail | 17 | 19 | 89% |
+| line_items.quantity | 19 | 19 | 100% |
+| line_items.unit_price | 19 | 19 | 100% |
+| order_date | 8 | 8 | 100% |
+| po_number | 19 | 19 | 100% |
+| subtotal | 11 | 11 | 100% |
+| tax | 11 | 11 | 100% |
+| total | 19 | 19 | 100% |
+| vendor_name | 19 | 19 | 100% |
+
+### Field accuracy by document condition
+
+| Condition | Correct | Total | Accuracy |
+| --- | ---: | ---: | ---: |
+| clean PDF | 185 | 189 | 98% |
+| faded scan | 13 | 13 | 100% |
+| rotated scan | 13 | 13 | 100% |
+
+### Incorrect fields
+
+| Document | Field | Expected | Extracted |
+| --- | --- | --- | --- |
+| inv_total_high.pdf | line_items[0].description | Web Design | Web Design Campaign |
+| inv_total_high.pdf | line_items[0].detail | Campaign landing page | landing page |
+| po_dup_b.pdf | line_items[0].description | Web Design | Web Design Campaign |
+| po_dup_b.pdf | line_items[0].detail | Campaign landing page | landing page |
+
+`line_items.description` and `line_items.detail` both missed on the same 2 documents: `inv_total_high.pdf`, `po_dup_b.pdf`. In both cases the model split the template line that combines description and detail (Web Design / Campaign landing page) into description `Web Design Campaign` and detail `landing page`.
+
+### Unverified or weak citations
+
+| Document | Field | Status |
+| --- | --- | --- |
+| inv_clean.pdf | currency | weak |
+| inv_clean_copy.pdf | currency | weak |
+| inv_clean_faded.png | currency | weak |
+| inv_clean_rotated.png | currency | weak |
+| inv_date.pdf | currency | weak |
+| inv_dup_a.pdf | currency | weak |
+| inv_dup_b.pdf | currency | weak |
+| inv_lines.pdf | currency | weak |
+| inv_total_high.pdf | currency | weak |
+| inv_total_med.pdf | currency | weak |
+| inv_vendor.pdf | currency | weak |
+
+Citation verification rate: **200/211** (95%).
+
+### Expected findings
+
+| Check | Documents | Severity | Caught |
+| --- | --- | --- | --- |
+| vendor_mismatch | inv_vendor.pdf, po_vendor.pdf | high | yes |
+| total_mismatch | inv_total_high.pdf, po_total_high.pdf | high | yes |
+| total_mismatch | inv_total_med.pdf, po_total_med.pdf | medium | yes |
+| line_item_price_mismatch | inv_lines.pdf, po_lines.pdf | medium | yes |
+| line_item_quantity_mismatch | inv_lines.pdf, po_lines.pdf | medium | yes |
+| invoice_dated_before_po | inv_date.pdf, po_date.pdf | medium | yes |
+| duplicate_invoice_number | inv_dup_a.pdf, inv_dup_b.pdf | high | yes |
+| duplicate_po_number | po_dup_a.pdf, po_dup_b.pdf | high | yes |
+| duplicate_document | inv_clean.pdf, inv_clean_copy.pdf | high | yes |
+| total_mismatch | inv_lines.pdf, po_lines.pdf | high | yes (correct, added to ground truth) |
+| line_item_price_mismatch | inv_total_high.pdf, po_total_high.pdf | medium | yes (correct, added to ground truth) |
+| line_item_price_mismatch | inv_total_med.pdf, po_total_med.pdf | medium | yes (correct, added to ground truth) |
+| duplicate_invoice_number | inv_clean_faded.png, inv_clean_rotated.png | high | yes (correct, added to ground truth) |
+
+Originally planted: **9**. After adding correct side-effect findings: **13** expected. False positives remaining: **0**. False negatives: **0**.
+
+### Findings added to ground truth
+
+| Check | Documents | Severity | Classification |
+| --- | --- | --- | --- |
+| total_mismatch | inv_lines.pdf, po_lines.pdf | high | Correct side effect of the planted quantity and unit-price change: invoice total $110.00 vs PO total $40.00. |
+| line_item_price_mismatch | inv_total_high.pdf, po_total_high.pdf | medium | Correct side effect of the planted high total mismatch: the PO unit price was lowered to $70.00, so the line-item price check also fires. |
+| line_item_price_mismatch | inv_total_med.pdf, po_total_med.pdf | medium | Correct side effect of the planted medium total mismatch: the PO unit price was lowered to $82.00, so the line-item price check also fires. |
+| duplicate_invoice_number | inv_clean_faded.png, inv_clean_rotated.png | high | Correct behaviour: the faded and rotated scans are copies of inv_clean.pdf and share invoice number INV-1001. inv_clean.pdf itself is excluded from this check because it is a byte-for-byte duplicate of inv_clean_copy.pdf. |
+
+### Remaining false positives
+
+None. The previous extras were correct findings missing from ground truth.
+
+### Ambiguous currency flags
+
+Every invoice in this corpus uses a bare `$` with no ISO code. **11/11** were flagged `ambiguous_currency_symbol`.
+
+### Limitations
+
+- Documents are synthetic PDFs and PNG scans from a single template generator, not real vendor invoices.
+- Sample size is 19 documents (11 invoices including two degraded scans, 8 purchase orders).
+- Extraction used `gemini-3.5-flash-lite` because the Gemini free tier rate-limits `gemini-3.6-flash`.
+- This is a smoke test that the checks fire on planted issues, not a benchmark of production accuracy.
+
+## Design decisions
+
+- **Traceable citations, verified in code.** Gemini returns paragraph IDs and a supporting quote. The backend looks up those OCR paragraphs, fuzzy-matches the quote, and sets `verified` / `weak` / `unverified`. Reviewers click a field to highlight the source region on the page image.
+- **OCR caching by file hash.** Vision results are stored per SHA-256 of the file bytes. Re-uploads of the same bytes reuse the cache and skip Vision.
+- **Duplicate detection.** The same hash is recorded as `duplicate_of_document_id` and can raise `duplicate_document`. Separate files that share an invoice or PO number raise `duplicate_invoice_number` / `duplicate_po_number`. Byte-identical copies are excluded from the invoice-number duplicate check so the hash duplicate is not double-counted.
+- **Severity calibration.** Total mismatches use a percent-of-PO threshold (`TOTAL_MISMATCH_HIGH_PERCENT`, default 5). Invoice-before-PO uses a day gap (`INVOICE_BEFORE_PO_LOW_DAYS`, default 7).
+- **Swappable LLM provider.** Extraction talks to `LLMProvider`. `GeminiProvider` is the implementation; tests inject fakes. `get_llm_provider()` is the default factory.
+- **Error classification.** 429 and 503/500/timeouts are retried with backoff. Billing and permission errors fail fast and are not retried. Evaluation `--model` sets `fallback_model=""` so a 429 does not silently continue on Flash Lite.
+- **API key redaction in logs.** Vision uses the `X-Goog-Api-Key` header. `httpx` / `httpcore` log at WARNING. A logging filter redacts `AIza` + 35 characters from log records.
+- **Reviewer edits recompute findings.** Approve, reject, edit, and reset write an audit-log row. Edits keep the original AI value. After a review action the auditor runs again so findings match the current field values.
