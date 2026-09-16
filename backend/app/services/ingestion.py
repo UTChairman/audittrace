@@ -14,7 +14,7 @@ from app.db.models import (
 from app.services.ocr.parser import parse_vision_page_response
 from app.services.ocr.repository import save_parsed_page
 from app.services.ocr.vision import VisionOcrError, annotate_image
-from app.services.pdf import PdfProcessingError, render_image_page, render_pdf_to_pages
+from app.utils.files import to_data_relative_path
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +29,7 @@ def _persist_document_pages(db: Session, document_id: int, rendered_pages) -> No
             DocumentPage(
                 document_id=document_id,
                 page_number=rendered.page_number,
-                image_path=str(rendered.image_path),
+                image_path=to_data_relative_path(rendered.image_path),
                 width_px=rendered.width_px,
                 height_px=rendered.height_px,
             )

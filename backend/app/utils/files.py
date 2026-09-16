@@ -29,15 +29,31 @@ def detect_image_suffix(content_type: str, filename: str) -> str:
 
 def to_data_relative_path(path: str | Path) -> str:
     """Return a path relative to the data directory using forward slashes."""
-    path_obj = Path(path)
-    absolute = path_obj.resolve()
-    data_root = DATA_DIR.resolve()
+    raw = str(path).replace("\\", "/")
+    path_obj = Path(raw)
     try:
+        absolute = path_obj.resolve()
+        data_root = DATA_DIR.resolve()
         return absolute.relative_to(data_root).as_posix()
-    except ValueError:
-        parts = path_obj.as_posix().split("/")
-        if "data" in parts:
-            data_index = parts.index("data")
-            return "/".join(parts[data_index + 1 :])
-        return path_obj.as_posix()
+    except (ValueError, OSError):
+        pass
+    parts = [part for part in raw.split("/") if part]
+    if "data" in parts:
+        data_index = parts.index("data")
+        return "/".join(parts[data_index + 1 :])
+    return path_obj.as_posix().lstrip("/")
+
+
+def resolve_data_file(stored: str) -> Path | None:
+    """Map a stored relative or host-absolute data path onto the current DATA_DIR."""
+    relative = to_data_relative_path(stored)
+    candidate = Path(relative)
+    if candidate.is_absolute():
+        path = candidate.resolve()
+    else:
+        path = (DATA_DIR / relative).resolve()
+    data_root = DATA_DIR.resolve()
+    if path != data_root and data_root not in path.parents:
+        return None
+    return path
 

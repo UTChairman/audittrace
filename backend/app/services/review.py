@@ -1,12 +1,12 @@
 import json
 from datetime import datetime, timezone
-from pathlib import Path
 
 from fastapi import HTTPException
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from app.config import DATA_DIR
+from app.utils.files import resolve_data_file
 from app.db.models import Document, DocumentPage, ExtractedField, Extraction, ReviewAction
 from app.schemas.review import ReviewActionListOut, ReviewActionOut, ReviewFieldIn
 from app.services.extraction.pipeline import get_latest_extraction
@@ -220,11 +220,8 @@ def page_image_response(db: Session, document_id: int, page_number: int) -> File
     )
     if page is None:
         raise HTTPException(status_code=404, detail="Page image not found")
-    stored = Path(page.image_path)
-    path = stored if stored.is_absolute() else (DATA_DIR / page.image_path)
-    path = path.resolve()
-    data_root = DATA_DIR.resolve()
-    if path != data_root and data_root not in path.parents:
+    path = resolve_data_file(page.image_path)
+    if path is None:
         raise HTTPException(status_code=400, detail="Invalid page image path")
     if not path.is_file():
         raise HTTPException(status_code=404, detail="Page image file is missing")
