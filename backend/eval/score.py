@@ -194,6 +194,7 @@ def score_findings(db) -> dict[str, Any]:
             "severity": item.severity,
             "documents": list(item.documents),
             "added_to_ground_truth": item.added_to_ground_truth,
+            "original_false_positive": item.original_false_positive,
             "classification": item.classification,
         }
         if key in actual_set:
@@ -223,6 +224,7 @@ def score_findings(db) -> dict[str, Any]:
                 "severity": item.severity,
                 "documents": list(item.documents),
                 "classification": item.classification,
+                "original_false_positive": item.original_false_positive,
             }
             for item in added
         ],
@@ -452,32 +454,40 @@ def render_markdown(
         )
     fp = len(finding_score["false_positives"])
     fn = len(finding_score["missed"])
-    original = finding_score.get("planted", len(PLANTED_FINDINGS))
-    expected = finding_score.get("expected", len(PLANTED_FINDINGS))
+    original = sum(1 for item in PLANTED_FINDINGS if not item.added_to_ground_truth)
+    added_items = [item for item in PLANTED_FINDINGS if item.added_to_ground_truth]
+    original_fp_count = sum(1 for item in added_items if item.original_false_positive)
+    expected = len(PLANTED_FINDINGS)
+    later = [item for item in added_items if not item.original_false_positive]
+    later_desc = "; ".join(
+        f"`{item.check_type}` on {', '.join(f'`{name}`' for name in item.documents)}"
+        for item in later
+    )
     lines.extend(
         [
             "",
-            f"Originally planted: **{original}**. After adding correct side-effect findings: **{expected}** expected. "
+            f"Originally planted: **{original}**. Original extras (false positives): **{original_fp_count}**. "
+            f"Findings added to ground truth: **{len(added_items)}**. Expected now: **{expected}**. "
             f"False positives remaining: **{fp}**. False negatives: **{fn}**.",
             "",
             "### Findings added to ground truth",
             "",
         ]
     )
-    added = finding_score.get("added_to_ground_truth") or []
-    if not added:
+    if not added_items:
         lines.append("None.")
     else:
         lines.extend(
             [
-                "| Check | Documents | Severity | Classification |",
-                "| --- | --- | --- | --- |",
+                "| Check | Documents | Severity | Original extra | Classification |",
+                "| --- | --- | --- | --- | --- |",
             ]
         )
-        for item in added:
+        for item in added_items:
+            extra = "yes" if item.original_false_positive else "no"
             lines.append(
-                f"| {item['check_type']} | {', '.join(item['documents'])} | "
-                f"{item.get('severity') or '—'} | {item.get('classification') or '—'} |"
+                f"| {item.check_type} | {', '.join(item.documents)} | "
+                f"{item.severity or '—'} | {extra} | {item.classification or '—'} |"
             )
 
     lines.extend(
@@ -489,7 +499,24 @@ def render_markdown(
     )
     extras = finding_score.get("false_positives") or []
     if not extras:
-        lines.append("None. The previous extras were correct findings missing from ground truth.")
+        if original_fp_count and later_desc:
+            later_count = len(later)
+            later_noun = "finding was" if later_count == 1 else "findings were"
+            lines.append(
+                f"None. The original evaluation reported **{original_fp_count}** extras; "
+                "all of them were side effects of planted data and were added to ground truth. "
+                f"A further **{later_count}** expected {later_noun} also added "
+                f"({later_desc}) after degraded scans were included in audit scoring. "
+                "Those files were extraction-only in the original run, so that finding was not "
+                f"among the {original_fp_count} false positives."
+            )
+        elif original_fp_count:
+            lines.append(
+                f"None. The original evaluation reported **{original_fp_count}** extras; "
+                "all of them were added to ground truth."
+            )
+        else:
+            lines.append("None.")
     else:
         lines.extend(
             [
@@ -530,7 +557,7 @@ def render_markdown(
             "",
             "- Documents are synthetic PDFs and PNG scans from a single template generator, not real vendor invoices.",
             "- Sample size is 19 documents (11 invoices including two degraded scans, 8 purchase orders).",
-            "- Extraction used `gemini-3.5-flash-lite` because the Gemini free tier rate-limits `gemini-3.6-flash`.",
+            "- Extraction used `gemini-3.5-flash-lite` (not the API default `GEMINI_MODEL=gemini-3.6-flash`) because the Gemini free tier rate-limits `gemini-3.6-flash`.",
             "- This is a smoke test that the checks fire on planted issues, not a benchmark of production accuracy.",
             "",
         ]

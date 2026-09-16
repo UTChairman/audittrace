@@ -30,10 +30,10 @@ Exact-copy banner on the second upload of `invoice.pdf`.
 
 Audit log of approve, reject, edit, reset, and findings-recalculated rows.
 
-Regenerate from the repository root with the Docker UI running. Playwright is not in `backend/requirements.txt`; install it in the backend venv if needed:
+Regenerate from the repository root with the Docker UI running. Playwright is a backend dev extra, not in `requirements.txt` (so the Docker image stays small):
 
 ```powershell
-backend\.venv\Scripts\python.exe -m pip install playwright
+backend\.venv\Scripts\python.exe -m pip install -r backend\requirements-dev.txt
 backend\.venv\Scripts\python.exe -m playwright install chromium
 backend\.venv\Scripts\python.exe scripts\take_screenshots.py --base-url http://localhost:8080
 ```
@@ -62,7 +62,7 @@ The API and SQLite database live in `backend/`. The React reviewer is in `fronte
 
 Copy `.env.example` to `.env` in the repository root. Do not commit `.env`.
 
-1. **Gemini** — Google AI Studio, create an API key, set `GEMINI_API_KEY`. Optional: `GEMINI_MODEL` (default `gemini-3.6-flash`) and `GEMINI_FALLBACK_MODEL` (default `gemini-3.5-flash-lite`). The fallback is used by the API after transient retries fail; evaluation pins one model and disables fallback.
+1. **Gemini** — Google AI Studio, create an API key, set `GEMINI_API_KEY`. Optional: `GEMINI_MODEL` (default **`gemini-3.6-flash`**) and `GEMINI_FALLBACK_MODEL` (default `gemini-3.5-flash-lite`). The fallback is used by the API after transient retries fail. Evaluation pins one model and disables fallback. The published eval below used **`gemini-3.5-flash-lite`**, not the API default, because the Gemini free tier rate-limits `gemini-3.6-flash`.
 2. **Cloud Vision** — Google Cloud project with the Vision API enabled, create an API key, set `GOOGLE_VISION_API_KEY`. The backend sends it as `X-Goog-Api-Key`, not in the URL.
 
 The GitHub Actions workflow does not use these keys. Tests mock Vision and Gemini.
@@ -144,7 +144,7 @@ From `backend/` with the venv activated:
 python -m eval.run --delay 20 --model gemini-3.5-flash-lite
 ```
 
-`--model` pins that Gemini model for the whole run and disables fallback. Documents that still fail after retries are marked failed and skipped. Documents already extracted with a different model are reset to `ocr_complete` and re-extracted (OCR cache is reused). Re-run the same command to resume.
+`--model` pins that Gemini model for the whole run and disables fallback. The API default `GEMINI_MODEL` is still `gemini-3.6-flash`; the published numbers below used `gemini-3.5-flash-lite` because the Gemini free tier rate-limits `gemini-3.6-flash`. Documents that still fail after retries are marked failed and skipped. Documents already extracted with a different model are reset to `ocr_complete` and re-extracted (OCR cache is reused). Re-run the same command to resume.
 
 Rebuild the markdown report from the existing eval database (no Vision or Gemini calls):
 
@@ -158,7 +158,7 @@ On the Gemini free tier a full run is about 15–40 minutes (19 files, two Gemin
 
 ## Evaluation results
 
-Run of 19 synthetic documents on `gemini-3.5-flash-lite` (no fallback). Originally 9 planted findings were listed; 4 additional findings were correct behaviour missing from ground truth and were added. Remaining false positives: 0. False negatives: 0.
+The API default `GEMINI_MODEL` is `gemini-3.6-flash`. This published run used `gemini-3.5-flash-lite` (no fallback) because the Gemini free tier rate-limits `gemini-3.6-flash`. Originally 9 planted findings were listed. The first report had **3** false positives; those three were side effects of planted data and were added to ground truth. A fourth expected finding (`duplicate_invoice_number` on the faded and rotated scans) was also added after those files were included in audit scoring — they were extraction-only in the original report, so that check was not one of the 3 extras. Remaining false positives: 0. False negatives: 0.
 
 Field accuracy: most types 100%. `line_items.description` and `line_items.detail` were 17/19 (89%), both wrong on the same two documents (`inv_total_high.pdf`, `po_dup_b.pdf`). Citation verification: 200/211 (95%); the 11 weak citations are every invoice `currency` field, which is the expected badge for a bare `$`. Scan quality: faded and rotated copies of `inv_clean.pdf` were 13/13; the four field errors were on clean PDFs (185/189). All 11 invoices that use a bare `$` were flagged `ambiguous_currency_symbol`.
 
@@ -262,20 +262,20 @@ Citation verification rate: **200/211** (95%).
 | line_item_price_mismatch | inv_total_med.pdf, po_total_med.pdf | medium | yes (correct, added to ground truth) |
 | duplicate_invoice_number | inv_clean_faded.png, inv_clean_rotated.png | high | yes (correct, added to ground truth) |
 
-Originally planted: **9**. After adding correct side-effect findings: **13** expected. False positives remaining: **0**. False negatives: **0**.
+Originally planted: **9**. Original extras (false positives): **3**. Findings added to ground truth: **4**. Expected now: **13**. False positives remaining: **0**. False negatives: **0**.
 
 ### Findings added to ground truth
 
-| Check | Documents | Severity | Classification |
-| --- | --- | --- | --- |
-| total_mismatch | inv_lines.pdf, po_lines.pdf | high | Correct side effect of the planted quantity and unit-price change: invoice total $110.00 vs PO total $40.00. |
-| line_item_price_mismatch | inv_total_high.pdf, po_total_high.pdf | medium | Correct side effect of the planted high total mismatch: the PO unit price was lowered to $70.00, so the line-item price check also fires. |
-| line_item_price_mismatch | inv_total_med.pdf, po_total_med.pdf | medium | Correct side effect of the planted medium total mismatch: the PO unit price was lowered to $82.00, so the line-item price check also fires. |
-| duplicate_invoice_number | inv_clean_faded.png, inv_clean_rotated.png | high | Correct behaviour: the faded and rotated scans are copies of inv_clean.pdf and share invoice number INV-1001. inv_clean.pdf itself is excluded from this check because it is a byte-for-byte duplicate of inv_clean_copy.pdf. |
+| Check | Documents | Severity | Original extra | Classification |
+| --- | --- | --- | --- | --- |
+| total_mismatch | inv_lines.pdf, po_lines.pdf | high | yes | Correct side effect of the planted quantity and unit-price change: invoice total $110.00 vs PO total $40.00. |
+| line_item_price_mismatch | inv_total_high.pdf, po_total_high.pdf | medium | yes | Correct side effect of the planted high total mismatch: the PO unit price was lowered to $70.00, so the line-item price check also fires. |
+| line_item_price_mismatch | inv_total_med.pdf, po_total_med.pdf | medium | yes | Correct side effect of the planted medium total mismatch: the PO unit price was lowered to $82.00, so the line-item price check also fires. |
+| duplicate_invoice_number | inv_clean_faded.png, inv_clean_rotated.png | high | no | Correct behaviour: the faded and rotated scans are copies of inv_clean.pdf and share invoice number INV-1001. inv_clean.pdf itself is excluded from this check because it is a byte-for-byte duplicate of inv_clean_copy.pdf. |
 
 ### Remaining false positives
 
-None. The previous extras were correct findings missing from ground truth.
+None. The original evaluation reported **3** extras; all of them were side effects of planted data and were added to ground truth. A further **1** expected finding was also added (`duplicate_invoice_number` on `inv_clean_faded.png`, `inv_clean_rotated.png`) after degraded scans were included in audit scoring. Those files were extraction-only in the original run, so that finding was not among the 3 false positives.
 
 ### Ambiguous currency flags
 
@@ -285,7 +285,7 @@ Every invoice in this corpus uses a bare `$` with no ISO code. **11/11** were fl
 
 - Documents are synthetic PDFs and PNG scans from a single template generator, not real vendor invoices.
 - Sample size is 19 documents (11 invoices including two degraded scans, 8 purchase orders).
-- Extraction used `gemini-3.5-flash-lite` because the Gemini free tier rate-limits `gemini-3.6-flash`.
+- Extraction used `gemini-3.5-flash-lite` (not the API default `GEMINI_MODEL=gemini-3.6-flash`) because the Gemini free tier rate-limits `gemini-3.6-flash`.
 - This is a smoke test that the checks fire on planted issues, not a benchmark of production accuracy.
 
 ## Design decisions

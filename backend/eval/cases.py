@@ -63,6 +63,7 @@ class PlantedFinding:
     documents: tuple[str, ...]
     severity: str | None = None
     added_to_ground_truth: bool = False
+    original_false_positive: bool = False
     classification: str | None = None
 
 
@@ -251,6 +252,7 @@ PLANTED_FINDINGS: tuple[PlantedFinding, ...] = (
         ("inv_lines.pdf", "po_lines.pdf"),
         "high",
         added_to_ground_truth=True,
+        original_false_positive=True,
         classification=(
             "Correct side effect of the planted quantity and unit-price change: "
             "invoice total $110.00 vs PO total $40.00."
@@ -261,6 +263,7 @@ PLANTED_FINDINGS: tuple[PlantedFinding, ...] = (
         ("inv_total_high.pdf", "po_total_high.pdf"),
         "medium",
         added_to_ground_truth=True,
+        original_false_positive=True,
         classification=(
             "Correct side effect of the planted high total mismatch: the PO unit price "
             "was lowered to $70.00, so the line-item price check also fires."
@@ -271,6 +274,7 @@ PLANTED_FINDINGS: tuple[PlantedFinding, ...] = (
         ("inv_total_med.pdf", "po_total_med.pdf"),
         "medium",
         added_to_ground_truth=True,
+        original_false_positive=True,
         classification=(
             "Correct side effect of the planted medium total mismatch: the PO unit price "
             "was lowered to $82.00, so the line-item price check also fires."

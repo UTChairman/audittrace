@@ -134,7 +134,12 @@ def test_render_markdown_includes_accuracy_table() -> None:
     )
     assert "| Field type |" in markdown
     assert "vendor_mismatch" in markdown
+    assert "Originally planted: **9**" in markdown
+    assert "Original extras (false positives): **3**" in markdown
+    assert "Findings added to ground truth: **4**" in markdown
+    assert "Expected now: **13**" in markdown
     assert "False positives remaining: **0**" in markdown
+    assert "Original extra" in markdown
     assert "yes" in markdown
     assert "### Limitations" in markdown
     assert "### Incorrect fields" in markdown
