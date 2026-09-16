@@ -133,7 +133,13 @@ From `backend/` in PowerShell (venv activated):
 python -m eval.run --delay 20
 ```
 
-That command writes about 19 synthetic PDFs/PNGs, then OCR-extracts **one document at a time** with a 20 second pause between them. It reuses the existing Gemini retry/backoff. If it fails or you stop it, run the same command again; finished documents are skipped. When everything is already extracted, the same command only re-runs audit scoring and does not call Gemini.
+Pin one Gemini model for the whole run (no fallback to Flash Lite). Documents that hit 429 after retries are marked failed and skipped; they are not extracted with a different model. Documents already extracted with another model are reset to `ocr_complete` and re-extracted.
+
+```powershell
+python -m eval.run --delay 20 --model gemini-3.6-flash
+```
+
+That command writes about 19 synthetic PDFs/PNGs, then OCR-extracts **one document at a time** with a 20 second pause between them. It retries the pinned model only. If it fails or you stop it, run the same command again; finished documents for that model are skipped. When everything is already extracted with the requested model, the same command only re-runs audit scoring and does not call Gemini. `results.md` records the model used for each document.
 
 Report only (no Vision/Gemini calls):
 

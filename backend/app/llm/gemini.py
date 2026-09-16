@@ -285,9 +285,11 @@ class GeminiProvider:
             if not self._fallback_model:
                 raise
             logger.warning(
-                "Primary Gemini model %s unavailable after retries; trying fallback %s once",
-                self._model,
-                self._fallback_model,
+                "%s",
+                (
+                    f"Primary Gemini model {self._model} unavailable after retries; "
+                    f"trying fallback {self._fallback_model} once"
+                ),
             )
             try:
                 return await self._generate_once(

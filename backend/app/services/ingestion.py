@@ -216,9 +216,9 @@ def _render_pages(document: Document, file_bytes: bytes):
     return render_image_page(file_bytes, document.id, suffix=suffix)
 
 
-async def process_uploaded_document(document_id: int) -> None:
+async def process_uploaded_document(document_id: int, provider=None) -> None:
     """OCR a document, then classify and extract cited fields."""
     await process_document_ocr(document_id)
     from app.services.extraction.pipeline import process_document_extraction
 
-    await process_document_extraction(document_id)
+    await process_document_extraction(document_id, provider=provider)

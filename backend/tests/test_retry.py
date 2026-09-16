@@ -366,3 +366,48 @@ async def test_generate_structured_uses_temperature_zero() -> None:
     )
     await provider.generate_structured("extract", _Ping)
     assert temperatures == [0]
+
+
+@pytest.mark.asyncio
+async def test_empty_fallback_does_not_switch_models_after_retries() -> None:
+    calls: list[str] = []
+
+    async def generate_content(*, model: str, contents: str, config) -> _FakeResponse:
+        calls.append(model)
+        raise _FakeServerError(429, "RESOURCE_EXHAUSTED", "rate limited")
+
+    provider = GeminiProvider(
+        client=_FakeClient(generate_content),
+        model="gemini-3.6-flash",
+        fallback_model="",
+        max_transient_attempts=2,
+        retry_initial_delay_seconds=0.01,
+        retry_max_delay_seconds=0.02,
+    )
+    with pytest.raises(LLMRateLimitError):
+        await provider.generate_structured("extract", _Ping)
+    assert calls == ["gemini-3.6-flash", "gemini-3.6-flash"]
+
+
+@pytest.mark.asyncio
+async def test_fallback_warning_keeps_space_before_once(caplog) -> None:
+    import logging
+
+    async def generate_content(*, model: str, contents: str, config) -> _FakeResponse:
+        if model == "gemini-3.6-flash":
+            raise _FakeServerError(503, "UNAVAILABLE", "high demand")
+        return _FakeResponse(_Ping(ok=True))
+
+    provider = GeminiProvider(
+        client=_FakeClient(generate_content),
+        model="gemini-3.6-flash",
+        fallback_model="gemini-3.5-flash-lite",
+        max_transient_attempts=1,
+        retry_initial_delay_seconds=0.01,
+        retry_max_delay_seconds=0.02,
+    )
+    with caplog.at_level(logging.WARNING, logger="app.llm.gemini"):
+        await provider.generate_structured("extract", _Ping)
+    messages = "\n".join(record.getMessage() for record in caplog.records)
+    assert "gemini-3.5-flash-lite once" in messages
+    assert "gemini-3.5-flash-liteonce" not in messages

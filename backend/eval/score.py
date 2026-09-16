@@ -185,15 +185,72 @@ def score_currency_flags(db) -> dict[str, Any]:
     return {"flags": results}
 
 
-def render_markdown(field_score: dict[str, Any], finding_score: dict[str, Any], flag_score: dict[str, Any]) -> str:
+def score_document_models(db, requested_model: str | None = None) -> dict[str, Any]:
+    from app.db.models import Document, DocumentClassification, Extraction
+
+    rows = []
+    for document in db.query(Document).order_by(Document.id.asc()).all():
+        extraction = (
+            db.query(Extraction)
+            .filter(Extraction.document_id == document.id)
+            .order_by(Extraction.created_at.desc(), Extraction.id.desc())
+            .first()
+        )
+        classification = (
+            db.query(DocumentClassification)
+            .filter(DocumentClassification.document_id == document.id)
+            .first()
+        )
+        model = None
+        if extraction is not None:
+            model = extraction.model
+        elif classification is not None:
+            model = classification.model
+        rows.append(
+            {
+                "filename": document.filename,
+                "status": document.status,
+                "model": model,
+            }
+        )
+    return {"requested": requested_model, "rows": rows}
+
+
+def render_markdown(
+    field_score: dict[str, Any],
+    finding_score: dict[str, Any],
+    flag_score: dict[str, Any],
+    model_score: dict[str, Any] | None = None,
+) -> str:
     lines = [
         "## Evaluation summary",
         "",
-        "### Field accuracy",
-        "",
-        "| Field type | Correct | Total | Accuracy |",
-        "| --- | ---: | ---: | ---: |",
     ]
+    if model_score:
+        requested = model_score.get("requested") or "—"
+        lines.extend(
+            [
+                f"Pinned model: **{requested}** (no fallback).",
+                "",
+                "### Models used",
+                "",
+                "| Document | Status | Model |",
+                "| --- | --- | --- |",
+            ]
+        )
+        for row in model_score.get("rows") or []:
+            lines.append(
+                f"| {row['filename']} | {row['status']} | {row.get('model') or '—'} |"
+            )
+        lines.extend(["", "### Field accuracy", ""])
+    else:
+        lines.extend(["### Field accuracy", ""])
+    lines.extend(
+        [
+            "| Field type | Correct | Total | Accuracy |",
+            "| --- | ---: | ---: | ---: |",
+        ]
+    )
     for name in sorted(field_score["by_type"]):
         stats = field_score["by_type"][name]
         total = stats["total"] or 1
