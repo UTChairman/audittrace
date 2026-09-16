@@ -32,7 +32,7 @@ async def annotate_image(image_bytes: bytes) -> dict:
     async with httpx.AsyncClient(timeout=120.0) as client:
         response = await client.post(
             VISION_URL,
-            params={"key": settings.google_vision_api_key},
+            headers={"X-Goog-Api-Key": settings.google_vision_api_key},
             json=payload,
         )
 

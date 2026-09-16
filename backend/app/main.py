@@ -1,16 +1,12 @@
-import logging
-
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes import audit, documents, extraction, health, review, upload
 from app.config import ensure_data_dirs
 from app.db.models import init_db
+from app.logging_config import configure_logging
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
-)
+configure_logging()
 
 ensure_data_dirs()
 init_db()
