@@ -93,7 +93,29 @@ List findings for one document:
 curl "http://localhost:8000/api/documents/1/findings"
 ```
 
-### Tests
+## Phase 4: Reviewer UI
+
+The React app lives in `frontend/`. Keep the existing API on port 8000; do not start a second backend.
+
+From `frontend/` in PowerShell:
+
+```powershell
+npm install
+npm run dev
+```
+
+Open [http://localhost:5173](http://localhost:5173). Vite proxies `/api` to `http://127.0.0.1:8000`.
+
+Review actions: `POST /api/documents/{id}/review`. Page images: `GET /api/documents/{id}/pages/{n}/image`. Audit log: `GET /api/review-actions`. Export: `/api/export.json` and `/api/export.csv`.
+
+### What to click
+
+1. **Live status** — Documents lists each file with Pending / Processing / Extracting / Extracted / Failed. Error text appears in the Error column. Drop a PDF to watch status poll every 2 seconds.
+2. **Click to highlight** — Open `invoice.pdf`. Click `vendor_name` (or Web Design). A box is drawn on the cited paragraph and the page scrolls to it. Resize the window; the box stays aligned.
+3. **Badges** — On the invoice, `currency` should show Weak plus **Ambiguous currency**, with suggested **AUD** and Melbourne evidence.
+4. **Review + audit log** — Approve, Reject, or Edit a field (edit keeps the original AI value). Open **Audit log** and confirm the action.
+5. **Findings evidence** — Open **Findings**, then a two-document finding such as vendor mismatch. Both pages appear side by side with the cited fields highlighted.
+6. **Export** — Use **Export JSON** or **Export CSV** in the header.
 
 From `backend/`:
 
