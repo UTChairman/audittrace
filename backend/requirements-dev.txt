@@ -1,0 +1,2 @@
+# Dev extras not installed in Docker. Used for README screenshots.
+playwright>=1.63.0
